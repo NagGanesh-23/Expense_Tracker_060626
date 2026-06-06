@@ -16,13 +16,13 @@ jobs:
     - name: Set up Python Environment
       uses: actions/setup-python@v4
       with:
-        python-version: '3.11'  # Upgraded past warning limits
+        python-version: '3.11'
 
     - name: Install Required Libraries
       run: |
         python -m pip install --upgrade pip
-        pip install pandas google-genai gspread oauth2client  # Modernized library target
-        
+        pip install pandas google-genai gspread oauth2client pypdf
+
     - name: Execute Expense Tracker Script
       env:
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
