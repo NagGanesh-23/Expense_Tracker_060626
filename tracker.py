@@ -1,29 +1,31 @@
 import os
 import pandas as pd
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import json
 import time
+from pydantic import BaseModel, Field
+from typing import Literal
 
 # ==========================================
 # 1. SECURITY & CLIENT INITIALIZATION
 # ==========================================
-genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
+# Target the modern, supported GenAI initialization strategy
+ai_client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
 creds_dict = json.loads(os.environ.get("GOOGLE_CREDS_JSON"))
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-client = gspread.authorize(creds)
-sheet = client.open("My Expense Tracker").sheet1 
+gspread_client = gspread.authorize(creds)
 
-model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash",
-    generation_config={"response_mime_type": "application/json"}
-)
+# !!! MAKE SURE THIS MATCHES YOUR ACTUAL GOOGLE SHEET NAME EXACTLY !!!
+SPREADSHEET_NAME = "My Expense Tracker"
+sheet = gspread_client.open(SPREADSHEET_NAME).sheet1 
 
 # ==========================================
-# 2. THE PLATFORM CONFIGURATION ENGINE (Future-Proof)
+# 2. THE PLATFORM CONFIGURATION ENGINE
 # ==========================================
 CARD_CONFIGS = {
     "sbi_cc": {
@@ -46,28 +48,28 @@ CARD_CONFIGS = {
     }
 }
 
+# Define the strict structured parsing output schema using modern Pydantic
+class TransactionClassification(BaseModel):
+    vendor: str = Field(description="The cleaned name of the merchant or destination vendor.")
+    category: Literal["Food", "Transport", "Utilities", "Shopping", "Entertainment", "Investment", "Salary", "Unknown"]
+
 # ==========================================
 # 3. NORMALIZATION UTILITIES
 # ==========================================
 def clean_dataframe_headers(df):
-    """Helper to strip unnamed columns, clean trailing whitespaces, and normalize headers"""
-    # Remove entirely unnamed or empty spacer columns
     df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
-    # Strip whitespaces from column labels
     df.columns = df.columns.str.strip()
     return df
 
 def normalize_icici_bank(file_path):
-    """Parses your specific ICICI Savings Account CSV structure"""
     df = pd.read_csv(file_path, skiprows=12)
     df = clean_dataframe_headers(df)
     
-    # Fallback lookup in case of shifting row indices
     remarks_col = [col for col in df.columns if 'Remarks' in col or 'Narration' in col]
     date_col = [col for col in df.columns if 'Transaction Date' in col]
     
     if not remarks_col or not date_col:
-        print(f"Crucial header mapping missed in ICICI Bank file format. Available columns: {list(df.columns)}")
+        print(f"Skipping file due to bad formatting headers. Available: {list(df.columns)}")
         return pd.DataFrame()
         
     df.dropna(subset=[remarks_col[0]], inplace=True)
@@ -76,7 +78,6 @@ def normalize_icici_bank(file_path):
     normalized['Date'] = df[date_col[0]]
     normalized['Narration'] = df[remarks_col[0]].astype(str).str.strip()
     
-    # Locate currency amount columns resiliently
     w_col = [c for c in df.columns if 'Withdrawal' in c][0]
     d_col = [c for c in df.columns if 'Deposit' in c][0]
     
@@ -88,19 +89,15 @@ def normalize_icici_bank(file_path):
     return normalized
 
 def normalize_generic_card(file_path, config):
-    """Parses standard credit card structures using mapping variables safely"""
     df = pd.read_csv(file_path, skiprows=config["skiprows"])
     df = clean_dataframe_headers(df)
     
-    # Verify required headers are present dynamically
     for key in ["date_col", "desc_col", "amt_col"]:
         if config[key] not in df.columns:
-            # Dynamic fallback strategy if names don't match exactly
             matched = [c for c in df.columns if config[key].lower() in c.lower()]
             if matched:
                 config[key] = matched[0]
             else:
-                print(f"Missing expected header column: {config[key]} in file. Headers: {list(df.columns)}")
                 return pd.DataFrame()
 
     normalized = pd.DataFrame()
@@ -113,7 +110,7 @@ def normalize_generic_card(file_path, config):
     return normalized
 
 # ==========================================
-# 4. FILTER MATRIX (Internal & Peer Transfers)
+# 4. FILTER MATRIX
 # ==========================================
 def rule_based_classifier(narration, tx_type):
     n_upper = narration.upper()
@@ -136,16 +133,21 @@ def rule_based_classifier(narration, tx_type):
 # 5. CORE EXECUTION ENGINE
 # ==========================================
 def classify_with_ai(narration):
-    system_prompt = """
-    You are an expert financial auditing engine. Categorize this bank statement narration.
-    Respond ONLY with a valid JSON object matching this schema exactly:
-    {"vendor": "Cleaned Merchant Name", "category": "Food" | "Transport" | "Utilities" | "Shopping" | "Entertainment" | "Investment" | "Salary" | "Unknown"}
-    """
     try:
-        response = model.generate_content(f"{system_prompt}\n\nNarration: {narration}")
+        # Utilizing the modern SDK structure config interface
+        response = ai_client.models.generate_content(
+            model='gemini-1.5-flash',
+            contents=f"Categorize this transaction narration: {narration}",
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=TransactionClassification,
+                system_instruction="You are an expert financial tracking engine. Categorize narration segments."
+            ),
+        )
         result = json.loads(response.text)
         return result.get("vendor", "Unknown"), result.get("category", "Unknown")
-    except:
+    except Exception as e:
+        print(f"AI parsing error skipped: {e}")
         return "Unknown", "Unknown"
 
 def run_pipeline():
@@ -153,7 +155,6 @@ def run_pipeline():
     statement_dir = "./statements"
     
     if not os.path.exists(statement_dir):
-        print("No statements folder directory discovered.")
         return
 
     for file in os.listdir(statement_dir):
@@ -175,11 +176,9 @@ def run_pipeline():
             if matched_config:
                 df = normalize_generic_card(path, matched_config)
             else:
-                print(f"Skipping {file}: Prefix configuration mapping missing.")
                 continue
             
         if df.empty:
-            print(f"Skipping empty dataframe iteration layout for file: {file}")
             continue
 
         for _, row in df.iterrows():
@@ -189,7 +188,7 @@ def run_pipeline():
             vendor, category = rule_based_classifier(narration, tx_type)
             if not category:
                 vendor, category = classify_with_ai(narration)
-                time.sleep(1) # Protect free tier engine limits
+                time.sleep(1) 
                 
             all_data.append([row['Date'], narration, row['Amount'], tx_type, vendor, category])
 
@@ -199,7 +198,7 @@ def run_pipeline():
         sheet.append_rows(all_data)
         print(f"Pipeline Execution Complete. Successfully loaded {len(all_data)} rows.")
     else:
-        print("No valid transaction histories were detected to synchronize.")
+        print("No transactions processed.")
 
 if __name__ == "__main__":
     run_pipeline()
