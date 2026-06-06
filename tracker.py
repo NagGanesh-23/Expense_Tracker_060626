@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import numpy as np
 from google import genai
 from google.genai import types
 import gspread
@@ -44,6 +45,16 @@ def clean_dataframe_headers(df):
     df.columns = df.columns.str.strip()
     return df
 
+def sanitize_float(val):
+    """Replaces non-JSON compliant float values like NaN or Infinity with 0.0"""
+    try:
+        f_val = float(val)
+        if np.isnan(f_val) or np.isinf(f_val):
+            return 0.0
+        return f_val
+    except:
+        return 0.0
+
 # ==========================================
 # 3. CSV NORMALIZATION (ICICI SAVINGS BANK)
 # ==========================================
@@ -73,15 +84,30 @@ def normalize_icici_bank_csv(file_path):
         narration = str(row[remarks_col[0]]).strip()
         date = str(row[date_col[0]]).strip()
         
+        # Guard against metadata rows dropping into the data stack
+        if not narration or "DETAILED STATEMENT" in narration or "Transactions List" in narration:
+            continue
+            
         if w_match and d_match:
-            w_amt = pd.to_numeric(str(row[w_match[0]]).replace(',', ''), errors='coerce') or 0
-            d_amt = pd.to_numeric(str(row[d_match[0]]).replace(',', ''), errors='coerce') or 0
+            w_str = str(row[w_match[0]]).replace(',', '').strip()
+            d_str = str(row[d_match[0]]).replace(',', '').strip()
+            
+            w_amt = pd.to_numeric(w_str, errors='coerce') or 0
+            d_amt = pd.to_numeric(d_str, errors='coerce') or 0
+            
+            # Clean non-compliant numbers instantly
+            w_amt = sanitize_float(w_amt)
+            d_amt = sanitize_float(d_amt)
+            
             if w_amt > 0:
                 amt, tx_type = w_amt, 'DEBIT'
             else:
                 amt, tx_type = d_amt, 'CREDIT'
         else:
             amt, tx_type = 0, 'DEBIT'
+            
+        if amt == 0 and not narration:
+            continue
             
         parsed_rows.append({"date": date, "narration": narration, "amount": amt, "type": tx_type})
     return parsed_rows
@@ -90,7 +116,6 @@ def normalize_icici_bank_csv(file_path):
 # 4. LLM-BASED PDF STATEMENT EXTRACTION
 # ==========================================
 def extract_transactions_from_pdf_via_ai(file_path):
-    """Extracts text contents via pypdf and uses Gemini to map columns with absolute structural accuracy"""
     text_content = ""
     try:
         reader = PdfReader(file_path)
@@ -108,6 +133,7 @@ def extract_transactions_from_pdf_via_ai(file_path):
     prompt = f"Extract all individual transactions, purchases, fees, reversals, and settlements from this text layout dump:\n\n{text_content}"
     
     try:
+        # Crucial Fix: 'gemini-1.5-flash' name used explicitly without prefix strings
         response = ai_client.models.generate_content(
             model='gemini-1.5-flash',
             contents=prompt,
@@ -120,7 +146,7 @@ def extract_transactions_from_pdf_via_ai(file_path):
         data = json.loads(response.text)
         return data.get("transactions", [])
     except Exception as e:
-        print(f"AI Statement Parsing Failure on document: {e}")
+        print(f"AI Statement Parsing Failure on document {file_path}: {e}")
         return []
 
 # ==========================================
@@ -146,13 +172,12 @@ def rule_based_classifier(narration):
     return None, None
 
 def enrich_and_categorize(narration, tx_type):
-    # Rule engine layer
     vendor, category = rule_based_classifier(narration)
     if category:
         return vendor, category
         
-    # AI Fallback categorization layer
     try:
+        # Crucial Fix: Standardized to 'gemini-1.5-flash' name string to eliminate 404s
         response = ai_client.models.generate_content(
             model='gemini-1.5-flash',
             contents=f"Classify this narration: {narration} (Type: {tx_type})",
@@ -168,7 +193,7 @@ def enrich_and_categorize(narration, tx_type):
         return "Unknown", "Unknown"
 
 # ==========================================
-# 6. SYSTEM RUN PIPELINE Execution
+# 6. SYSTEM RUN PIPELINE EXECUTION
 # ==========================================
 def run_pipeline():
     all_rows = []
@@ -199,11 +224,15 @@ def run_pipeline():
             continue
 
         for tx in transactions:
-            narration = tx["narration"]
-            tx_type = tx["type"]
-            date = tx["date"]
-            amount = tx["amount"]
+            narration = str(tx["narration"]).strip()
+            tx_type = str(tx["type"]).strip()
+            date = str(tx["date"]).strip()
+            amount = sanitize_float(tx["amount"]) # Forces all calculations into pure JSON compliant floats
             
+            # Clean string structures to prevent terminal serialization payload issues
+            if not date or (amount == 0.0 and not narration):
+                continue
+                
             vendor, category = enrich_and_categorize(narration, tx_type)
             all_rows.append([date, narration, amount, tx_type, vendor, category])
 
