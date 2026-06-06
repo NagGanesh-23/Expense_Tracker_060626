@@ -122,17 +122,28 @@ def normalize_generic_card(file_path, config):
     return normalized
 
 # ==========================================
-# 4. FILTER MATRIX
+# 4. FILTER MATRIX (Prioritized Overrides)
 # ==========================================
 def rule_based_classifier(narration, tx_type):
     n_upper = narration.upper()
     
+    # Priority 1: High-Frequency Deterministic Merchant Matches
+    if "SWIGGY" in n_upper:
+        return "Swiggy", "Food"
+    if "ZOMATO" in n_upper:
+        return "Zomato", "Food"
+    if "ZEPTO" in n_upper or "BLINKIT" in n_upper:
+        return "Quick Commerce Grocery", "Shopping"
+    
+    # Priority 2: Credit Card Bill Payments (Removes double counting)
     if any(x in n_upper for x in ["CRED CC", "NEFT-CARD PAYMENT", "CC PAYMT", "SBICARD"]):
         return "Credit Card Settlement", "Internal Transfer"
     
+    # Priority 3: Self-Account / Internal Transfers
     if "OWN ACC" in n_upper or "TRANSFER TO" in n_upper or "INFT" in n_upper:
         return "Self Transfer", "Internal Transfer"
     
+    # Priority 4: True Peer-to-Peer UPI Transfers
     if "UPI/" in n_upper and not any(x in n_upper for x in ["RETAIL", "MERCHANT", "INFRA", "AGENCY"]):
         parts = narration.split('/')
         if len(parts) > 1:
@@ -142,7 +153,7 @@ def rule_based_classifier(narration, tx_type):
     return None, None
 
 # ==========================================
-# 5. CORE EXECUTION ENGINE
+# 5. CORE EXECUTION ENGINE (With Debugging)
 # ==========================================
 def classify_with_ai(narration):
     try:
@@ -152,14 +163,15 @@ def classify_with_ai(narration):
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=TransactionClassification,
-                system_instruction="You are an expert financial tracking engine. Categorize narration segments cleanly."
+                system_instruction="You are an expert financial tracking engine. Categorize narration segments cleanly into the provided schema structural boundaries."
             ),
         )
         result = json.loads(response.text)
         return result.get("vendor", "Unknown"), result.get("category", "Unknown")
     except Exception as e:
-        print(f"AI processing exception bypassed: {e}")
-        return "Unknown", "Unknown"
+        # Expose the precise API error inside your GitHub Action log stream
+        print(f"CRITICAL AI FALLBACK ERROR for text [{narration}]: {e}")
+        return "AI Error Fallback", "Unknown"
 
 def run_pipeline():
     all_data = []
