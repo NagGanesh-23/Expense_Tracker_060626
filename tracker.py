@@ -156,24 +156,36 @@ def extract_transactions_from_pdf_via_ai(file_path):
                 break
     return []
 
+
 # ==========================================
 # 5. PRIORITIZED LOCAL DETERMINISTIC FILTER
 # ==========================================
 def rule_based_classifier(narration):
     n_upper = narration.upper()
+    
+    # Priority 1: Investment & Asset Management Houses (Captures Zerodha, Mutual Funds, ICCL)
+    if any(x in n_upper for x in ["ZERODHA", "INDIAN CLEARING", "ICCL", "GROWW", "INDMONEY"]):
+        return "Zerodha / Stock Investment", "Investment"
+        
+    # Priority 2: High-Frequency Merchant Matches
     if "SWIGGY" in n_upper: return "Swiggy", "Food"
     if "ZOMATO" in n_upper: return "Zomato", "Food"
     if "ZEPTO" in n_upper or "BLINKIT" in n_upper: return "Quick Commerce", "Shopping"
     
+    # Priority 3: Credit Card Bill Payments (Removes double counting)
     if any(x in n_upper for x in ["CRED CC", "NEFT-CARD PAYMENT", "CC PAYMT", "SBICARD", "IMPS-CARD"]):
         return "Credit Card Settlement", "Internal Transfer"
+        
+    # Priority 4: Self-Account / Internal Bank Transfers
     if "OWN ACC" in n_upper or "TRANSFER TO" in n_upper or "INFT" in n_upper:
         return "Self Transfer", "Internal Transfer"
         
+    # Priority 5: True Personal Peer-to-Peer UPI Transfers
     if "UPI/" in n_upper and not any(x in n_upper for x in ["RETAIL", "MERCHANT", "INFRA", "AGENCY"]):
         parts = narration.split('/')
         if len(parts) > 1: return parts[1], "Peer Transfer"
         return "UPI Personal Transfer", "Peer Transfer"
+        
     return None, None
 
 # ==========================================
