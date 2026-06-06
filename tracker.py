@@ -123,7 +123,7 @@ def extract_transactions_from_pdf_via_ai(file_path):
     
     try:
         response = ai_client.models.generate_content(
-            model='gemini-1.5-flash',
+            model='gemini-2.5-flash',
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
@@ -163,7 +163,7 @@ def enrich_and_categorize(narration, tx_type):
         
     try:
         response = ai_client.models.generate_content(
-            model='gemini-1.5-flash',
+            model='gemini-2.5-flash',
             contents=f"Classify this narration: {narration} (Type: {tx_type})",
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
