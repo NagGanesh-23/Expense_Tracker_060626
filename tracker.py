@@ -59,9 +59,7 @@ def clean_dataframe_headers(df):
     return df
 
 def normalize_icici_bank(file_path):
-    """Parses ICICI Savings Account structures dynamically avoiding Row-Offset drops"""
     try:
-        # Inspect line count to handle small test files vs giant statements gracefully
         with open(file_path, 'r') as f:
             line_count = sum(1 for _ in f)
         
@@ -86,7 +84,6 @@ def normalize_icici_bank(file_path):
     normalized['Date'] = df[date_col[0]]
     normalized['Narration'] = df[remarks_col[0]].astype(str).str.strip()
     
-    # Check if separate withdrawal/deposit layouts exist
     w_match = [c for c in df.columns if 'Withdrawal' in c]
     d_match = [c for c in df.columns if 'Deposit' in c]
     
@@ -96,7 +93,6 @@ def normalize_icici_bank(file_path):
         normalized['Amount'] = w_amt + d_amt
         normalized['Type'] = ['DEBIT' if w > 0 else 'CREDIT' for w in w_amt]
     else:
-        # Fallback tracking column behavior
         amt_match = [c for c in df.columns if 'Amount' in c or 'Amt' in c][0]
         raw_amt = df[amt_match].astype(str).str.replace(',', '')
         normalized['Type'] = ['CREDIT' if ('Cr' in val or '-' in val) else 'DEBIT' for val in raw_amt]
