@@ -6,8 +6,9 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import json
 import time
+from pypdf import PdfReader
 from pydantic import BaseModel, Field
-from typing import Literal
+from typing import Literal, List
 
 # ==========================================
 # 1. SECURITY & CLIENT INITIALIZATION
@@ -23,158 +24,154 @@ SPREADSHEET_NAME = "My Expense Tracker"
 sheet = gspread_client.open(SPREADSHEET_NAME).sheet1 
 
 # ==========================================
-# 2. THE PLATFORM CONFIGURATION ENGINE
+# 2. DATA UTILITIES & STRATEGIC SCHEMAS
 # ==========================================
-CARD_CONFIGS = {
-    "sbi_cc": {
-        "skiprows": 0,
-        "date_col": "Date",
-        "desc_col": "Transaction Details",
-        "amt_col": "Amount"
-    },
-    "icici_coral_amex": {
-        "skiprows": 0,
-        "date_col": "Transaction Date",
-        "desc_col": "Description",
-        "amt_col": "Amount"
-    },
-    "axis_myzone": {
-        "skiprows": 0,
-        "date_col": "Date",
-        "desc_col": "Transaction Description",
-        "amt_col": "Amount"
-    }
-}
+class TransactionItem(BaseModel):
+    date: str = Field(description="The transaction date found in the statement row.")
+    narration: str = Field(description="The merchant or transfer raw narration string.")
+    amount: float = Field(description="The transaction currency value numerical amount.")
+    type: Literal["DEBIT", "CREDIT"] = Field(description="DEBIT for spends/withdrawals, CREDIT for settlements/refunds.")
 
-class TransactionClassification(BaseModel):
-    vendor: str = Field(description="The cleaned name of the merchant or destination vendor.")
-    category: Literal["Food", "Transport", "Utilities", "Shopping", "Entertainment", "Investment", "Salary", "Unknown"]
+class StatementExtractionSchema(BaseModel):
+    transactions: List[TransactionItem]
 
-# ==========================================
-# 3. NORMALIZATION UTILITIES
-# ==========================================
+class FinalRowSchema(BaseModel):
+    vendor: str = Field(description="Cleaned business entity or person name.")
+    category: Literal["Food", "Transport", "Utilities", "Shopping", "Entertainment", "Investment", "Salary", "Internal Transfer", "Peer Transfer", "Unknown"]
+
 def clean_dataframe_headers(df):
     df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
     df.columns = df.columns.str.strip()
     return df
 
-def normalize_icici_bank(file_path):
+# ==========================================
+# 3. CSV NORMALIZATION (ICICI SAVINGS BANK)
+# ==========================================
+def normalize_icici_bank_csv(file_path):
     try:
         with open(file_path, 'r') as f:
             line_count = sum(1 for _ in f)
-        
         rows_to_skip = 12 if line_count > 12 else 0
         df = pd.read_csv(file_path, skiprows=rows_to_skip)
     except Exception as e:
-        print(f"File reading error on path {file_path}: {e}")
-        return pd.DataFrame()
+        print(f"CSV Read error on {file_path}: {e}")
+        return []
         
     df = clean_dataframe_headers(df)
-    
-    remarks_col = [col for col in df.columns if 'Remarks' in col or 'Narration' in col or 'Remarks' in col]
-    date_col = [col for col in df.columns if 'Date' in col]
+    remarks_col = [col for col in df.columns if any(x in col.upper() for x in ['REMARKS', 'NARRATION', 'DETAILS'])]
+    date_col = [col for col in df.columns if 'DATE' in col.upper()]
     
     if not remarks_col or not date_col:
-        print(f"Skipping processing matrix: Column structural match failed. Headers found: {list(df.columns)}")
-        return pd.DataFrame()
+        return []
         
     df.dropna(subset=[remarks_col[0]], inplace=True)
+    w_match = [c for c in df.columns if 'WITHDRAWAL' in c.upper() or 'DEBIT' in c.upper()]
+    d_match = [c for c in df.columns if 'DEPOSIT' in c.upper() or 'CREDIT' in c.upper()]
     
-    normalized = pd.DataFrame()
-    normalized['Date'] = df[date_col[0]]
-    normalized['Narration'] = df[remarks_col[0]].astype(str).str.strip()
-    
-    w_match = [c for c in df.columns if 'Withdrawal' in c]
-    d_match = [c for c in df.columns if 'Deposit' in c]
-    
-    if w_match and d_match:
-        w_amt = pd.to_numeric(df[w_match[0]].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
-        d_amt = pd.to_numeric(df[d_match[0]].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
-        normalized['Amount'] = w_amt + d_amt
-        normalized['Type'] = ['DEBIT' if w > 0 else 'CREDIT' for w in w_amt]
-    else:
-        amt_match = [c for c in df.columns if 'Amount' in c or 'Amt' in c][0]
-        raw_amt = df[amt_match].astype(str).str.replace(',', '')
-        normalized['Type'] = ['CREDIT' if ('Cr' in val or '-' in val) else 'DEBIT' for val in raw_amt]
-        normalized['Amount'] = pd.to_numeric(raw_amt.str.replace(' Cr', '').str.replace('-', ''), errors='coerce').fillna(0)
+    parsed_rows = []
+    for _, row in df.iterrows():
+        narration = str(row[remarks_col[0]]).strip()
+        date = str(row[date_col[0]]).strip()
         
-    return normalized
-
-def normalize_generic_card(file_path, config):
-    df = pd.read_csv(file_path, skiprows=config["skiprows"])
-    df = clean_dataframe_headers(df)
-    
-    for key in ["date_col", "desc_col", "amt_col"]:
-        if config[key] not in df.columns:
-            matched = [c for c in df.columns if config[key].lower() in c.lower()]
-            if matched:
-                config[key] = matched[0]
+        if w_match and d_match:
+            w_amt = pd.to_numeric(str(row[w_match[0]]).replace(',', ''), errors='coerce') or 0
+            d_amt = pd.to_numeric(str(row[d_match[0]]).replace(',', ''), errors='coerce') or 0
+            if w_amt > 0:
+                amt, tx_type = w_amt, 'DEBIT'
             else:
-                return pd.DataFrame()
+                amt, tx_type = d_amt, 'CREDIT'
+        else:
+            amt, tx_type = 0, 'DEBIT'
+            
+        parsed_rows.append({"date": date, "narration": narration, "amount": amt, "type": tx_type})
+    return parsed_rows
 
-    normalized = pd.DataFrame()
-    normalized['Date'] = df[config["date_col"]]
-    normalized['Narration'] = df[config["desc_col"]].astype(str).str.strip()
+# ==========================================
+# 4. LLM-BASED PDF STATEMENT EXTRACTION
+# ==========================================
+def extract_transactions_from_pdf_via_ai(file_path):
+    """Extracts text contents via pypdf and uses Gemini to map columns with absolute structural accuracy"""
+    text_content = ""
+    try:
+        reader = PdfReader(file_path)
+        for page in reader.pages:
+            text = page.extract_text()
+            if text:
+                text_content += text + "\n"
+    except Exception as e:
+        print(f"Error accessing file path matrix {file_path}: {e}")
+        return []
+
+    if not text_content.strip():
+        return []
+
+    prompt = f"Extract all individual transactions, purchases, fees, reversals, and settlements from this text layout dump:\n\n{text_content}"
     
-    raw_amt = df[config["amt_col"]].astype(str).str.replace(',', '')
-    normalized['Type'] = ['CREDIT' if ('Cr' in val or '-' in val) else 'DEBIT' for val in raw_amt]
-    normalized['Amount'] = pd.to_numeric(raw_amt.str.replace(' Cr', '').str.replace('-', ''), errors='coerce').fillna(0)
-    return normalized
+    try:
+        response = ai_client.models.generate_content(
+            model='gemini-1.5-flash',
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=StatementExtractionSchema,
+                system_instruction="You are a financial analysis tool. Extract every transaction row from the card text block. Ignore rewards balances or summary stats. Ensure all monetary figures are parsed as clean floats."
+            )
+        )
+        data = json.loads(response.text)
+        return data.get("transactions", [])
+    except Exception as e:
+        print(f"AI Statement Parsing Failure on document: {e}")
+        return []
 
 # ==========================================
-# 4. FILTER MATRIX (Prioritized Overrides)
+# 5. ENHANCED RULE-BASED AND AI CLASSIFIER
 # ==========================================
-def rule_based_classifier(narration, tx_type):
+def rule_based_classifier(narration):
     n_upper = narration.upper()
     
-    # Priority 1: High-Frequency Deterministic Merchant Matches
-    if "SWIGGY" in n_upper:
-        return "Swiggy", "Food"
-    if "ZOMATO" in n_upper:
-        return "Zomato", "Food"
-    if "ZEPTO" in n_upper or "BLINKIT" in n_upper:
-        return "Quick Commerce Grocery", "Shopping"
+    if "SWIGGY" in n_upper: return "Swiggy", "Food"
+    if "ZOMATO" in n_upper: return "Zomato", "Food"
+    if "ZEPTO" in n_upper or "BLINKIT" in n_upper: return "Quick Commerce", "Shopping"
     
-    # Priority 2: Credit Card Bill Payments (Removes double counting)
-    if any(x in n_upper for x in ["CRED CC", "NEFT-CARD PAYMENT", "CC PAYMT", "SBICARD"]):
+    if any(x in n_upper for x in ["CRED CC", "NEFT-CARD PAYMENT", "CC PAYMT", "SBICARD", "IMPS-CARD"]):
         return "Credit Card Settlement", "Internal Transfer"
-    
-    # Priority 3: Self-Account / Internal Transfers
     if "OWN ACC" in n_upper or "TRANSFER TO" in n_upper or "INFT" in n_upper:
         return "Self Transfer", "Internal Transfer"
-    
-    # Priority 4: True Peer-to-Peer UPI Transfers
+        
     if "UPI/" in n_upper and not any(x in n_upper for x in ["RETAIL", "MERCHANT", "INFRA", "AGENCY"]):
         parts = narration.split('/')
-        if len(parts) > 1:
-            return parts[1], "Peer Transfer"
+        if len(parts) > 1: return parts[1], "Peer Transfer"
         return "UPI Personal Transfer", "Peer Transfer"
             
     return None, None
 
-# ==========================================
-# 5. CORE EXECUTION ENGINE (With Debugging)
-# ==========================================
-def classify_with_ai(narration):
+def enrich_and_categorize(narration, tx_type):
+    # Rule engine layer
+    vendor, category = rule_based_classifier(narration)
+    if category:
+        return vendor, category
+        
+    # AI Fallback categorization layer
     try:
         response = ai_client.models.generate_content(
             model='gemini-1.5-flash',
-            contents=f"Categorize this transaction narration: {narration}",
+            contents=f"Classify this narration: {narration} (Type: {tx_type})",
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
-                response_schema=TransactionClassification,
-                system_instruction="You are an expert financial tracking engine. Categorize narration segments cleanly into the provided schema structural boundaries."
+                response_schema=FinalRowSchema,
+                system_instruction="Analyze financial narration segments and map them into the categorization boundaries. Clean vendor names down to corporate equivalents."
             ),
         )
         result = json.loads(response.text)
         return result.get("vendor", "Unknown"), result.get("category", "Unknown")
-    except Exception as e:
-        # Expose the precise API error inside your GitHub Action log stream
-        print(f"CRITICAL AI FALLBACK ERROR for text [{narration}]: {e}")
-        return "AI Error Fallback", "Unknown"
+    except:
+        return "Unknown", "Unknown"
 
+# ==========================================
+# 6. SYSTEM RUN PIPELINE Execution
+# ==========================================
 def run_pipeline():
-    all_data = []
+    all_rows = []
     statement_dir = "./statements"
     
     if not os.path.exists(statement_dir):
@@ -182,47 +179,41 @@ def run_pipeline():
 
     for file in os.listdir(statement_dir):
         path = os.path.join(statement_dir, file)
-        if not file.endswith('.csv') or "keep.txt" in file:
+        f_lower = file.lower()
+        
+        if "keep.txt" in f_lower:
             continue
             
-        print(f"Processing File: {file}")
+        transactions = []
+        print(f"Processing target file signature: {file}")
         
-        if file.startswith("icici_bank"):
-            df = normalize_icici_bank(path)
-        else:
-            matched_config = None
-            for prefix, config in CARD_CONFIGS.items():
-                if file.startswith(prefix):
-                    matched_config = config
-                    break
-            
-            if matched_config:
-                df = normalize_generic_card(path, matched_config)
+        if f_lower.endswith('.csv') and f_lower.startswith('icici_bank'):
+            transactions = normalize_icici_bank_csv(path)
+        elif f_lower.endswith('.pdf'):
+            if any(f_lower.startswith(prefix) for prefix in ['sbi_cc', 'icici_coral_amex', 'axis_myzone']):
+                transactions = extract_transactions_from_pdf_via_ai(path)
+                time.sleep(2) # Protect API context limits
             else:
                 continue
-            
-        if df is None or df.empty:
-            print(f"File layout resulting in zero rows for execution framework: {file}")
+        else:
             continue
 
-        for _, row in df.iterrows():
-            narration = row['Narration']
-            tx_type = row['Type']
+        for tx in transactions:
+            narration = tx["narration"]
+            tx_type = tx["type"]
+            date = tx["date"]
+            amount = tx["amount"]
             
-            vendor, category = rule_based_classifier(narration, tx_type)
-            if not category:
-                vendor, category = classify_with_ai(narration)
-                time.sleep(1) 
-                
-            all_data.append([row['Date'], narration, row['Amount'], tx_type, vendor, category])
+            vendor, category = enrich_and_categorize(narration, tx_type)
+            all_rows.append([date, narration, amount, tx_type, vendor, category])
 
-    if all_data:
+    if all_rows:
         sheet.clear()
         sheet.append_row(["Date", "Original Narration", "Amount", "Type", "Vendor", "Category"])
-        sheet.append_rows(all_data)
-        print(f"Pipeline Execution Complete. Successfully loaded {len(all_data)} rows.")
+        sheet.append_rows(all_rows)
+        print(f"Pipeline executed successfully. Synchronized {len(all_rows)} rows.")
     else:
-        print("No metrics synchronized to Google Sheets.")
+        print("Zero transactions written.")
 
 if __name__ == "__main__":
     run_pipeline()
