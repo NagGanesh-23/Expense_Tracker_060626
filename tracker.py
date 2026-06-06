@@ -14,7 +14,6 @@ from typing import Literal, List
 # ==========================================
 # 1. SECURITY & CLIENT INITIALIZATION
 # ==========================================
-# Modern SDK implementation initialization
 ai_client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
 creds_dict = json.loads(os.environ.get("GOOGLE_CREDS_JSON"))
@@ -25,9 +24,6 @@ gspread_client = gspread.authorize(creds)
 SPREADSHEET_NAME = "My Expense Tracker"
 sheet = gspread_client.open(SPREADSHEET_NAME).sheet1 
 
-# ==========================================
-# 2. STRATEGIC CONTROL SCHEMAS
-# ==========================================
 class TransactionItem(BaseModel):
     date: str = Field(description="The transaction date found in the statement row.")
     narration: str = Field(description="The merchant or transfer raw narration string.")
@@ -56,7 +52,7 @@ def sanitize_float(val):
         return 0.0
 
 # ==========================================
-# 3. CSV NORMALIZATION (ICICI SAVINGS BANK)
+# 2. CSV NORMALIZATION (ICICI SAVINGS BANK)
 # ==========================================
 def normalize_icici_bank_csv(file_path):
     try:
@@ -90,7 +86,6 @@ def normalize_icici_bank_csv(file_path):
         if w_match and d_match:
             w_str = str(row[w_match[0]]).replace(',', '').strip()
             d_str = str(row[d_match[0]]).replace(',', '').strip()
-            
             w_amt = sanitize_float(pd.to_numeric(w_str, errors='coerce') or 0)
             d_amt = sanitize_float(pd.to_numeric(d_str, errors='coerce') or 0)
             
@@ -108,7 +103,7 @@ def normalize_icici_bank_csv(file_path):
     return parsed_rows
 
 # ==========================================
-# 4. MODERN LLM-BASED PDF EXTRACTION ENGINE
+# 3. MODERN LLM-BASED PDF EXTRACTION ENGINE
 # ==========================================
 def extract_transactions_from_pdf_via_ai(file_path):
     text_content = ""
@@ -116,10 +111,9 @@ def extract_transactions_from_pdf_via_ai(file_path):
         reader = PdfReader(file_path)
         for page in reader.pages:
             text = page.extract_text()
-            if text:
-                text_content += text + "\n"
+            if text: text_content += text + "\n"
     except Exception as e:
-        print(f"Error reading PDF data matrix {file_path}: {e}")
+        print(f"Error reading PDF {file_path}: {e}")
         return []
 
     if not text_content.strip():
@@ -128,14 +122,14 @@ def extract_transactions_from_pdf_via_ai(file_path):
     prompt = f"Extract all individual transactions, purchases, fees, reversals, and settlements from this text layout dump:\n\n{text_content}"
     
     try:
-        # Corrected method execution for the modern google-genai library standard
+        # Forced call profile using the active genai client model string mappings
         response = ai_client.models.generate_content(
             model='gemini-1.5-flash',
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=StatementExtractionSchema,
-                system_instruction="You are an automated financial auditing tool. Extract every transaction row from the provided text dump. Map values into clean floats."
+                system_instruction="You are a financial analysis tool. Extract every transaction row from the card text block. Output pure clean float numbers."
             )
         )
         data = json.loads(response.text)
@@ -145,11 +139,10 @@ def extract_transactions_from_pdf_via_ai(file_path):
         return []
 
 # ==========================================
-# 5. PRIORITIZED RULE ENGINE & CATEGORIZER
+# 4. PRIORITIZED FILTER MATRIX
 # ==========================================
 def rule_based_classifier(narration):
     n_upper = narration.upper()
-    
     if "SWIGGY" in n_upper: return "Swiggy", "Food"
     if "ZOMATO" in n_upper: return "Zomato", "Food"
     if "ZEPTO" in n_upper or "BLINKIT" in n_upper: return "Quick Commerce", "Shopping"
@@ -163,13 +156,11 @@ def rule_based_classifier(narration):
         parts = narration.split('/')
         if len(parts) > 1: return parts[1], "Peer Transfer"
         return "UPI Personal Transfer", "Peer Transfer"
-            
     return None, None
 
 def enrich_and_categorize(narration, tx_type):
     vendor, category = rule_based_classifier(narration)
-    if category:
-        return vendor, category
+    if category: return vendor, category
         
     try:
         response = ai_client.models.generate_content(
@@ -178,7 +169,7 @@ def enrich_and_categorize(narration, tx_type):
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=FinalRowSchema,
-                system_instruction="Analyze financial narration segments and map them into the categorization boundaries. Clean vendor names down to corporate equivalents."
+                system_instruction="Analyze financial narration segments and map them into the categorization boundaries."
             ),
         )
         result = json.loads(response.text)
@@ -187,21 +178,18 @@ def enrich_and_categorize(narration, tx_type):
         return "Unknown", "Unknown"
 
 # ==========================================
-# 6. PIPELINE RUN LOOP
+# 5. CORE SYSTEM PIPELINE RUNNER
 # ==========================================
 def run_pipeline():
     all_rows = []
     statement_dir = "./statements"
     
-    if not os.path.exists(statement_dir):
-        return
+    if not os.path.exists(statement_dir): return
 
     for file in os.listdir(statement_dir):
         path = os.path.join(statement_dir, file)
         f_lower = file.lower()
-        
-        if "keep.txt" in f_lower:
-            continue
+        if "keep.txt" in f_lower: continue
             
         transactions = []
         print(f"Processing target file signature: {file}")
@@ -211,7 +199,7 @@ def run_pipeline():
         elif f_lower.endswith('.pdf'):
             if any(f_lower.startswith(prefix) for prefix in ['sbi_cc', 'icici_coral_amex', 'axis_myzone']):
                 transactions = extract_transactions_from_pdf_via_ai(path)
-                time.sleep(2) # Protect API endpoints rate boundaries
+                time.sleep(2)
             else:
                 continue
         else:
@@ -223,8 +211,7 @@ def run_pipeline():
             date = str(tx["date"]).strip()
             amount = sanitize_float(tx["amount"])
             
-            if not date or (amount == 0.0 and not narration):
-                continue
+            if not date or (amount == 0.0 and not narration): continue
                 
             vendor, category = enrich_and_categorize(narration, tx_type)
             all_rows.append([date, narration, amount, tx_type, vendor, category])
