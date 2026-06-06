@@ -14,6 +14,7 @@ from typing import Literal, List
 # ==========================================
 # 1. SECURITY & CLIENT INITIALIZATION
 # ==========================================
+# Modern SDK implementation initialization
 ai_client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
 creds_dict = json.loads(os.environ.get("GOOGLE_CREDS_JSON"))
@@ -25,7 +26,7 @@ SPREADSHEET_NAME = "My Expense Tracker"
 sheet = gspread_client.open(SPREADSHEET_NAME).sheet1 
 
 # ==========================================
-# 2. DATA UTILITIES & STRATEGIC SCHEMAS
+# 2. STRATEGIC CONTROL SCHEMAS
 # ==========================================
 class TransactionItem(BaseModel):
     date: str = Field(description="The transaction date found in the statement row.")
@@ -46,7 +47,6 @@ def clean_dataframe_headers(df):
     return df
 
 def sanitize_float(val):
-    """Replaces non-JSON compliant float values like NaN or Infinity with 0.0"""
     try:
         f_val = float(val)
         if np.isnan(f_val) or np.isinf(f_val):
@@ -84,7 +84,6 @@ def normalize_icici_bank_csv(file_path):
         narration = str(row[remarks_col[0]]).strip()
         date = str(row[date_col[0]]).strip()
         
-        # Guard against metadata rows dropping into the data stack
         if not narration or "DETAILED STATEMENT" in narration or "Transactions List" in narration:
             continue
             
@@ -92,12 +91,8 @@ def normalize_icici_bank_csv(file_path):
             w_str = str(row[w_match[0]]).replace(',', '').strip()
             d_str = str(row[d_match[0]]).replace(',', '').strip()
             
-            w_amt = pd.to_numeric(w_str, errors='coerce') or 0
-            d_amt = pd.to_numeric(d_str, errors='coerce') or 0
-            
-            # Clean non-compliant numbers instantly
-            w_amt = sanitize_float(w_amt)
-            d_amt = sanitize_float(d_amt)
+            w_amt = sanitize_float(pd.to_numeric(w_str, errors='coerce') or 0)
+            d_amt = sanitize_float(pd.to_numeric(d_str, errors='coerce') or 0)
             
             if w_amt > 0:
                 amt, tx_type = w_amt, 'DEBIT'
@@ -113,7 +108,7 @@ def normalize_icici_bank_csv(file_path):
     return parsed_rows
 
 # ==========================================
-# 4. LLM-BASED PDF STATEMENT EXTRACTION
+# 4. MODERN LLM-BASED PDF EXTRACTION ENGINE
 # ==========================================
 def extract_transactions_from_pdf_via_ai(file_path):
     text_content = ""
@@ -124,7 +119,7 @@ def extract_transactions_from_pdf_via_ai(file_path):
             if text:
                 text_content += text + "\n"
     except Exception as e:
-        print(f"Error accessing file path matrix {file_path}: {e}")
+        print(f"Error reading PDF data matrix {file_path}: {e}")
         return []
 
     if not text_content.strip():
@@ -133,14 +128,14 @@ def extract_transactions_from_pdf_via_ai(file_path):
     prompt = f"Extract all individual transactions, purchases, fees, reversals, and settlements from this text layout dump:\n\n{text_content}"
     
     try:
-        # Crucial Fix: 'gemini-1.5-flash' name used explicitly without prefix strings
+        # Corrected method execution for the modern google-genai library standard
         response = ai_client.models.generate_content(
             model='gemini-1.5-flash',
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=StatementExtractionSchema,
-                system_instruction="You are a financial analysis tool. Extract every transaction row from the card text block. Ignore rewards balances or summary stats. Ensure all monetary figures are parsed as clean floats."
+                system_instruction="You are an automated financial auditing tool. Extract every transaction row from the provided text dump. Map values into clean floats."
             )
         )
         data = json.loads(response.text)
@@ -150,7 +145,7 @@ def extract_transactions_from_pdf_via_ai(file_path):
         return []
 
 # ==========================================
-# 5. ENHANCED RULE-BASED AND AI CLASSIFIER
+# 5. PRIORITIZED RULE ENGINE & CATEGORIZER
 # ==========================================
 def rule_based_classifier(narration):
     n_upper = narration.upper()
@@ -177,7 +172,6 @@ def enrich_and_categorize(narration, tx_type):
         return vendor, category
         
     try:
-        # Crucial Fix: Standardized to 'gemini-1.5-flash' name string to eliminate 404s
         response = ai_client.models.generate_content(
             model='gemini-1.5-flash',
             contents=f"Classify this narration: {narration} (Type: {tx_type})",
@@ -193,7 +187,7 @@ def enrich_and_categorize(narration, tx_type):
         return "Unknown", "Unknown"
 
 # ==========================================
-# 6. SYSTEM RUN PIPELINE EXECUTION
+# 6. PIPELINE RUN LOOP
 # ==========================================
 def run_pipeline():
     all_rows = []
@@ -217,7 +211,7 @@ def run_pipeline():
         elif f_lower.endswith('.pdf'):
             if any(f_lower.startswith(prefix) for prefix in ['sbi_cc', 'icici_coral_amex', 'axis_myzone']):
                 transactions = extract_transactions_from_pdf_via_ai(path)
-                time.sleep(2) # Protect API context limits
+                time.sleep(2) # Protect API endpoints rate boundaries
             else:
                 continue
         else:
@@ -227,9 +221,8 @@ def run_pipeline():
             narration = str(tx["narration"]).strip()
             tx_type = str(tx["type"]).strip()
             date = str(tx["date"]).strip()
-            amount = sanitize_float(tx["amount"]) # Forces all calculations into pure JSON compliant floats
+            amount = sanitize_float(tx["amount"])
             
-            # Clean string structures to prevent terminal serialization payload issues
             if not date or (amount == 0.0 and not narration):
                 continue
                 
