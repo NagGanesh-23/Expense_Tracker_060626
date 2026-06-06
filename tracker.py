@@ -7,9 +7,10 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import json
 import time
+import re
 from pypdf import PdfReader
 from pydantic import BaseModel, Field
-from typing import Literal, List
+from typing import Literal, List, Dict
 
 # ==========================================
 # 1. SECURITY & CLIENT INITIALIZATION
@@ -24,6 +25,12 @@ gspread_client = gspread.authorize(creds)
 SPREADSHEET_NAME = "My Expense Tracker"
 sheet = gspread_client.open(SPREADSHEET_NAME).sheet1 
 
+# Global Cache to eliminate redundant AI calls across duplicate merchant names
+AI_CLASSIFICATION_CACHE: Dict[str, Dict[str, str]] = {}
+
+# ==========================================
+# 2. STRATEGIC SCHEMA STRUCTS
+# ==========================================
 class TransactionItem(BaseModel):
     date: str = Field(description="The transaction date found in the statement row.")
     narration: str = Field(description="The merchant or transfer raw narration string.")
@@ -33,9 +40,13 @@ class TransactionItem(BaseModel):
 class StatementExtractionSchema(BaseModel):
     transactions: List[TransactionItem]
 
-class FinalRowSchema(BaseModel):
+class BatchClassificationItem(BaseModel):
+    original_narration: str = Field(description="The exact raw narration string sent in the input list.")
     vendor: str = Field(description="Cleaned business entity or person name.")
     category: Literal["Food", "Transport", "Utilities", "Shopping", "Entertainment", "Investment", "Salary", "Internal Transfer", "Peer Transfer", "Unknown"]
+
+class BatchClassificationSchema(BaseModel):
+    results: List[BatchClassificationItem]
 
 def clean_dataframe_headers(df):
     df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
@@ -52,7 +63,7 @@ def sanitize_float(val):
         return 0.0
 
 # ==========================================
-# 2. CSV NORMALIZATION (ICICI SAVINGS BANK)
+# 3. CSV NORMALIZATION (ICICI SAVINGS BANK)
 # ==========================================
 def normalize_icici_bank_csv(file_path):
     try:
@@ -103,7 +114,7 @@ def normalize_icici_bank_csv(file_path):
     return parsed_rows
 
 # ==========================================
-# 3. MODERN LLM-BASED PDF EXTRACTION ENGINE
+# 4. LLM-BASED PDF STATEMENT EXTRACTION
 # ==========================================
 def extract_transactions_from_pdf_via_ai(file_path):
     text_content = ""
@@ -121,24 +132,32 @@ def extract_transactions_from_pdf_via_ai(file_path):
 
     prompt = f"Extract all individual transactions, purchases, fees, reversals, and settlements from this text layout dump:\n\n{text_content}"
     
-    try:
-        response = ai_client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=StatementExtractionSchema,
-                system_instruction="You are a financial analysis tool. Extract every transaction row from the card text block. Output pure clean float numbers."
+    # Implements Exponential Backoff to gracefully bypass 429 errors
+    for attempt in range(3):
+        try:
+            response = ai_client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=StatementExtractionSchema,
+                    system_instruction="You are a financial analysis tool. Extract every transaction row from the card text block. Output pure clean float numbers."
+                )
             )
-        )
-        data = json.loads(response.text)
-        return data.get("transactions", [])
-    except Exception as e:
-        print(f"AI Statement Parsing Failure on document {file_path}: {e}")
-        return []
+            data = json.loads(response.text)
+            return data.get("transactions", [])
+        except Exception as e:
+            if "429" in str(e):
+                wait_time = 40 * (attempt + 1)
+                print(f"Rate ceiling triggered during PDF parsing. Pausing for {wait_time}s...")
+                time.sleep(wait_time)
+            else:
+                print(f"AI PDF Extraction Failure: {e}")
+                break
+    return []
 
 # ==========================================
-# 4. PRIORITIZED FILTER MATRIX
+# 5. PRIORITIZED LOCAL DETERMINISTIC FILTER
 # ==========================================
 def rule_based_classifier(narration):
     n_upper = narration.upper()
@@ -157,34 +176,63 @@ def rule_based_classifier(narration):
         return "UPI Personal Transfer", "Peer Transfer"
     return None, None
 
-def enrich_and_categorize(narration, tx_type):
-    vendor, category = rule_based_classifier(narration)
-    if category: return vendor, category
+# ==========================================
+# 6. BULK BATCHING CLASSIFICATION ENGINE
+# ==========================================
+def batch_classify_with_ai(unclassified_narrations: List[str]) -> Dict[str, Dict[str, str]]:
+    """Sends a block of unique transactions to Gemini simultaneously to conserve rate constraints"""
+    if not unclassified_narrations:
+        return {}
         
-    try:
-        response = ai_client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=f"Classify this narration: {narration} (Type: {tx_type})",
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=FinalRowSchema,
-                system_instruction="Analyze financial narration segments and map them into the categorization boundaries."
-            ),
-        )
-        result = json.loads(response.text)
-        return result.get("vendor", "Unknown"), result.get("category", "Unknown")
-    except:
-        return "Unknown", "Unknown"
+    results_map = {}
+    # Chunk inputs into groups of 25 lines maximum
+    chunk_size = 25
+    
+    for i in range(0, len(unclassified_narrations), chunk_size):
+        chunk = unclassified_narrations[i:i+chunk_size]
+        payload = [{"narration": n} for n in chunk]
+        
+        prompt = f"Categorize this batch array list of transaction lines:\n\n{json.dumps(payload)}"
+        
+        for attempt in range(3):
+            try:
+                response = ai_client.models.generate_content(
+                    model='gemini-2.5-flash',
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=BatchClassificationSchema,
+                        system_instruction="Analyze financial narration array lines and map them cleanly into the categorization schema logic."
+                    ),
+                )
+                batch_data = json.loads(response.text)
+                for item in batch_data.get("results", []):
+                    results_map[item["original_narration"]] = {
+                        "vendor": item["vendor"],
+                        "category": item["category"]
+                    }
+                break # Exit wait retry loop on successful query match
+            except Exception as e:
+                if "429" in str(e):
+                    print("Batch categorization hit a rate limit block. Backing off for 45s...")
+                    time.sleep(45)
+                else:
+                    print(f"Batch analysis runtime exception: {e}")
+                    break
+        time.sleep(5) # Standard spacing cushion between bulk operations
+        
+    return results_map
 
 # ==========================================
-# 5. CORE SYSTEM PIPELINE RUNNER
+# 7. MAIN ENGINE RUN PIPELINE
 # ==========================================
 def run_pipeline():
-    all_rows = []
+    all_raw_transactions = []
     statement_dir = "./statements"
     
     if not os.path.exists(statement_dir): return
 
+    # Phase 1: Ingest and Normalize across document streams
     for file in os.listdir(statement_dir):
         path = os.path.join(statement_dir, file)
         f_lower = file.lower()
@@ -198,30 +246,59 @@ def run_pipeline():
         elif f_lower.endswith('.pdf'):
             if any(f_lower.startswith(prefix) for prefix in ['sbi_cc', 'icici_coral_amex', 'axis_myzone']):
                 transactions = extract_transactions_from_pdf_via_ai(path)
-                time.sleep(2)
+                time.sleep(5) 
             else:
                 continue
         else:
             continue
 
         for tx in transactions:
-            narration = str(tx["narration"]).strip()
-            tx_type = str(tx["type"]).strip()
-            date = str(tx["date"]).strip()
-            amount = sanitize_float(tx["amount"])
-            
-            if not date or (amount == 0.0 and not narration): continue
-                
-            vendor, category = enrich_and_categorize(narration, tx_type)
-            all_rows.append([date, narration, amount, tx_type, vendor, category])
+            all_raw_transactions.append({
+                "date": str(tx["date"]).strip(),
+                "narration": str(tx["narration"]).strip(),
+                "amount": sanitize_float(tx["amount"]),
+                "type": str(tx["type"]).strip()
+            })
 
-    if all_rows:
+    # Phase 2: Separate Rule Matches from complex AI lines
+    needed_ai_classification = set()
+    final_classified_rows = []
+    
+    for tx in all_raw_transactions:
+        # Step A: Apply local rules first
+        vendor, category = rule_based_classifier(tx["narration"])
+        if category:
+            AI_CLASSIFICATION_CACHE[tx["narration"]] = {"vendor": vendor, "category": category}
+        else:
+            needed_ai_classification.add(tx["narration"])
+
+    # Phase 3: Execute Batch AI processing for unmapped lines
+    print(f"Total entries needing AI verification: {len(needed_ai_classification)}")
+    ai_results = batch_classify_with_ai(list(needed_ai_classification))
+    
+    # Merge AI output down into master execution cache layer
+    AI_CLASSIFICATION_CACHE.update(ai_results)
+
+    # Phase 4: Construct final payload array
+    for tx in all_raw_transactions:
+        lookup = AI_CLASSIFICATION_CACHE.get(tx["narration"], {"vendor": "Unknown", "category": "Unknown"})
+        final_classified_rows.append([
+            tx["date"],
+            tx["narration"],
+            tx["amount"],
+            tx["type"],
+            lookup.get("vendor", "Unknown"),
+            lookup.get("category", "Unknown")
+        ])
+
+    # Phase 5: Push clear synchronization update down to Google Sheet
+    if final_classified_rows:
         sheet.clear()
         sheet.append_row(["Date", "Original Narration", "Amount", "Type", "Vendor", "Category"])
-        sheet.append_rows(all_rows)
-        print(f"Pipeline executed successfully. Synchronized {len(all_rows)} rows.")
+        sheet.append_rows(final_classified_rows)
+        print(f"Pipeline executed successfully. Synchronized {len(final_classified_rows)} rows.")
     else:
-        print("Zero transactions written.")
+        print("Zero rows populated.")
 
 if __name__ == "__main__":
     run_pipeline()
