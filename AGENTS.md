@@ -73,6 +73,18 @@
 
 ---
 
+## 5. 子代理与后续 AI 会话工作区规则 (Workspace Rules for AI & Subagents)
+
+> [!IMPORTANT]
+> **强行规则 (Mandatory Rules for All AI Sessions & Subagents)**:
+> 1. **严循 ANWS 规范流水线 (Pipeline Compliance)**: 所有开发与任务执行必须严格依照 `.anws/v1/05A_TASKS.md` 与 `05B_VERIFICATION_PLAN.md` 进行，先阅读任务清单再动手编码。
+> 2. **品质门禁铁律 (Quality Gate Enforcement)**: 任何代码变更在提交或向用户展示成果前，**必须**在虚拟环境中运行并百分之百通过格式化与单元测试：
+>    - `.\.venv\Scripts\black.exe --check .` (或 `black .`)
+>    - `.\.venv\Scripts\python.exe -m pytest tests/ -v`
+> 3. **后续需求归位 (v1.1 Feature Tracking)**: 所有新功能、扩展特性及范围外需求（如反馈同步、交互式复核等）**必须**记录并追踪在 `.anws/v1/05A_TASKS.md` 的 `v1.1 Post-v1 Pipeline Extensions` 任务块中，禁止脱离任务清单。
+
+---
+
 ## 项目状态保留区
 
 <!-- AUTO:BEGIN — 项目状态保留区（升级时唯一保留的部分，请勿手动修改区块边界） -->
@@ -81,18 +93,18 @@
 
 > **注意**: 这是项目文件中的保留部分，由 `/genesis`、`/blueprint` 和 `/forge` 自动维护。
 
-- **最新架构版本**: `.anws/v{N}`
-- **活动任务清单**: `尚未生成` (等待 /blueprint)
-- **待办任务数**: -
-- **最近一次更新**: `[由 Workflow 自动填充]`
+- **最新架构版本**: `.anws/v1` (v1.0 Baseline Tagged)
+- **活动任务清单**: `.anws/v1/05A_TASKS.md`
+- **待办任务数**: v1.0 Baseline 100% Verified
+- **最近一次更新**: `2026-07-25 (v1.0 Baseline Frozen)`
 
-### Wave 1 — 待 /blueprint 或 /forge 设置
+### Wave 1 — v1.0 Core Pipeline & Test Suite Complete
 
-*由 `/blueprint` 或 `/forge` 自动填充*
-
-
+* **执行状态**: ✅ 27/27 pytest tests passing | 0 pyright errors | black formatted
+* **当前关注点**: 准备开启 v1.1 功能扩展开发 (Feedback Sync, GSheets Setup, Interactive Review)
 
 ---
+
 
 ## 项目结构 (Project Tree)
 
