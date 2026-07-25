@@ -12,12 +12,24 @@ export interface DashboardData {
 
 export async function fetchDashboardData(): Promise<DashboardData> {
   try {
-    const endpointUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_GSHEETS_READONLY_URL || './api/data.json';
-    const res = await fetch(endpointUrl);
-    if (!res.ok) {
-      throw new Error(`Server returned ${res.status} from ${endpointUrl}`);
+    let data = null;
+    try {
+      const res = await fetch('./api/data.json');
+      if (res.ok) {
+        data = await res.json();
+      }
+    } catch (e) {
+      console.warn("Could not fetch ./api/data.json directly:", e);
     }
-    const data = await res.json();
+
+    if (!data) {
+      const endpointUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_GSHEETS_READONLY_URL || '/api/data';
+      const res = await fetch(endpointUrl);
+      if (!res.ok) {
+        throw new Error(`Server returned ${res.status} from ${endpointUrl}`);
+      }
+      data = await res.json();
+    }
     
     // Resolve using our robust dataLayer rules
     const { transactions, kpis } = resolveAllTransactions(
