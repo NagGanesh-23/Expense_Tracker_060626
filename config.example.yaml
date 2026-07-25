@@ -1,0 +1,90 @@
+# API Keys & Paths
+gemini_api_key: "YOUR_GEMINI_API_KEY_HERE"
+google_service_account_json: "credentials/service_account.json"
+google_sheet_id: "YOUR_GOOGLE_SHEET_ID_HERE"
+
+# ML Settings
+ml_confidence_threshold: 0.80
+llm_batch_size: 15
+cache_dir: ".cache/llm_responses"
+
+# Rule Engine Overrides
+own_upi_ids:
+  - "9916235816@yescred"
+own_account_last4:
+  - "2206"
+
+# Custom Rule Keywords
+category_keywords:
+  "Food & Dining":
+    - swiggy
+    - zomato
+    - poojaris fish land
+    - mcdonalds
+    - kfc
+    - mr ahmed ziyad
+    - khan saheb
+    - mr ahmed ziyad khan
+    - MR AHMED Z
+  "Fuel & Transport":
+    - bandipur fuels
+    - hpcl
+    - petrol
+    - bp
+    - shell
+    - GOPINATH
+  "Travel & Accommodation":
+    - airbnb
+  "Bank Charges & Fees":
+    - card replacement fee
+    - igst ci
+    - igst-ci
+    - finance charges
+  "Shopping":
+    - amazon
+    - flipkart
+    - myntra
+    - titan
+    - meesho
+  "Groceries & Supermarket":
+    - dmart
+    - blinkit
+    - zepto
+    - rajanna dommasandra jayasurya
+  "Investments & Finance":
+    - zerodha
+    - upstox
+    - INDIAN CLEARING CORP
+  "Domestic Help & Services":
+    - maid
+    - cleaner
+  "Credit Card Payment":
+    - cred
+  "Mutton":
+    - meat
+    - mr lathif khan
+  "Chicken":
+    - poultry
+    - vansanthakumar c
+    - vansantha kumar c
+    - mr ganesh m
+  "Un Wanted":
+    - pushpa c k
+    - pushpack
+    - upendra kumar
+    - UPENDRA KU
+  "EMI":
+    - LOAN
+    - EMI
+  "DIVIDEND":
+    - DIVIDEND
+    - NACH
+retrain_trigger_count:
+10
+audit_optional_fields:
+-
+reviewed_category
+-
+reviewed_at
+-
+reviewer_notes

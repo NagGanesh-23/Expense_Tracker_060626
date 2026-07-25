@@ -1,0 +1,13 @@
+{
+    "venvPath": ".",
+    "venv": ".venv",
+    "reportAttributeAccessIssue": "none",
+    "reportOptionalMemberAccess": "none",
+    "reportArgumentType": "none",
+    "reportPossiblyUnboundVariable": "none",
+    "reportGeneralTypeIssues": "none",
+    "reportReturnType": "none",
+    "reportCallIssue": "none",
+    "reportIndexIssue": "none",
+    "reportWildcardImportFromLibrary": "none"
+}

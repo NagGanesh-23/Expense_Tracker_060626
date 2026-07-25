@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-navy: #1E1E2E;
+  --color-brand-blue: #1E3A8A;
+  --color-brand-slate: #3B82F6;
+  --color-brand-light: #93C5FD;
+  --color-brand-bg: #F1F5F9;
+  --color-brand-card: #FFFFFF;
+  --color-brand-success: #22C55E;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-brand-bg);
+    color: #1F2937; /* gray-800 */
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}

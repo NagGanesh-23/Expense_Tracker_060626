@@ -1,0 +1,17 @@
+config.yaml
+credentials/
+passwords.txt
+.cache/
+.pytest_cache/
+data/
+models/*.npz
+__pycache__/
+*.pyc
+*.png
+logs/
+*.log
+audit/
+*.bak*
+
+
+
