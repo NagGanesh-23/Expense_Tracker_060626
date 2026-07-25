@@ -38,12 +38,6 @@ def main():
     df = df.drop_duplicates(subset=["transaction_id"], keep="first")
     print(f"Removed {initial_len - len(df)} exact transaction_id duplicates.")
 
-    # 3b. Drop rows flagged as duplicates in possible_duplicate column
-    if "possible_duplicate" in df.columns:
-        initial_len = len(df)
-        df = df[df["possible_duplicate"] != "⚠ Duplicate"]
-        print(f"Removed {initial_len - len(df)} flagged duplicate rows.")
-
     # 4. Add columns if not present
     new_cols = ["description_raw", "merchant_normalized", "review_status"]
     for c in new_cols:
