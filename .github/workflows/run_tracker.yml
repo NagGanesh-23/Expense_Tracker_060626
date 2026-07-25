@@ -23,8 +23,16 @@ jobs:
         python -m pip install --upgrade pip
         pip install pandas google-genai gspread oauth2client pypdf
 
+    - name: Write Google Credentials to File
+      env:
+        GOOGLE_CREDS_JSON: ${{ secrets.GOOGLE_CREDS_JSON }}
+      run: |
+        mkdir -p credentials
+        echo "$GOOGLE_CREDS_JSON" > credentials/service_account.json
+
     - name: Execute Expense Tracker Script
       env:
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        GOOGLE_CREDS_JSON: ${{ secrets.GOOGLE_CREDS_JSON }}
-      run: python tracker.py
+        PDF_PASSWORDS: ${{ secrets.PDF_PASSWORDS }}
+        GOOGLE_SERVICE_ACCOUNT_JSON: credentials/service_account.json
+      run: python expense_tracker.py --drive-sync
