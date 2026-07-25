@@ -12,6 +12,5 @@ logs/
 *.log
 audit/
 *.bak*
-
-
-
+files1/
+.gemini/

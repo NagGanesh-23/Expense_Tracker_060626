@@ -1,0 +1,67 @@
+name: Deploy ExpenseAudit Dashboard to GitHub Pages
+
+on:
+  push:
+    branches: [ main, master, fix/*, feat/* ]
+    paths:
+      - 'dashboard/**'
+      - '.github/workflows/deploy_dashboard.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install Dashboard Dependencies
+        run: |
+          cd dashboard
+          npm ci
+
+      - name: Verify Phase 4 QA Verification Harness
+        run: |
+          cd dashboard
+          npm run test:qa
+
+      - name: Build Dashboard Static Bundle
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_GSHEETS_READONLY_URL: ${{ secrets.VITE_GSHEETS_READONLY_URL }}
+        run: |
+          cd dashboard
+          npm run build
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Static Artifact for GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dashboard/dist
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
