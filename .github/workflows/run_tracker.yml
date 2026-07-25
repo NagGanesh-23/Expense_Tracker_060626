@@ -11,17 +11,19 @@ jobs:
 
     steps:
     - name: Checkout Repository Code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Set up Python Environment
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: '3.12'
+        cache: 'pip'
+        cache-dependency-path: 'requirements.txt'
 
     - name: Install Required Libraries
       run: |
         python -m pip install --upgrade pip
-        pip install pandas google-genai gspread oauth2client pypdf
+        pip install -r requirements.txt
 
     - name: Write Google Credentials to File
       env:

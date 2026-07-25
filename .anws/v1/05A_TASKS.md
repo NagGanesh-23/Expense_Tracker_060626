@@ -156,6 +156,17 @@ graph TD
     - `scripts/nuke_csv.py`: Quick utility to reset local CSV outputs.
     - `scripts/pull_training_data.py`: Fetches training records from external sources.
     - `scripts/test_crypto_core.py`: Standalone cryptography/decryption tester.
-    - `scripts/watch_and_run.py`: Local development watcher for continuous execution.
     - `scripts/dev-tools/terminal_peek.py`: CLI terminal inspection utility.
   - **优先级**: P2
+
+- [ ] **DASH-v1.1** [REQ-DASHBOARD]: Interactive Expense Dashboard
+  - **描述**: Implement an interactive analytics dashboard (read-only) with strict data resolution rules, 5 reactive views, and zero recurring cost.
+  - **输入**: `PRD_Interactive_Expense_Dashboard.md`, `Transactions`, `Category_Map`, and `Merchant_Aliases` tabs in Google Sheets.
+  - **输出**: Dashboard data layer (`dashboard/src/utils/dataLayer.ts` or equivalent API layer), frontend views, and comprehensive unit tests.
+  - **验收标准**:
+    - Given transactions with corrections, effective_category and effective_bucket are resolved dynamically against Category_Map.
+    - Transfer rows are excluded from spend/income/investment totals.
+    - Descriptions are truncated to ~60 characters.
+    - 5 reactive views (Overview, Categories, Banks, Classification Health, Audit/Anomalies) filter live without reload.
+  - **优先级**: P1
+

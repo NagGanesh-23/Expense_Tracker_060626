@@ -12,6 +12,11 @@ logs/
 *.log
 audit/
 *.bak*
-
-
-
+files1/
+.gemini/
+.env*
+*service_account*.json
+*credentials*.json
+*secret*.json
+dashboard/public/api/data.json
+scratch/
