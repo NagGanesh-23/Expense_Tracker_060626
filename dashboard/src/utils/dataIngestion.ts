@@ -12,7 +12,7 @@ export interface DashboardData {
 
 export async function fetchDashboardData(): Promise<DashboardData> {
   try {
-    const endpointUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_GSHEETS_READONLY_URL || '/api/data';
+    const endpointUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_GSHEETS_READONLY_URL || './api/data.json';
     const res = await fetch(endpointUrl);
     if (!res.ok) {
       throw new Error(`Server returned ${res.status} from ${endpointUrl}`);

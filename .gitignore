@@ -18,3 +18,5 @@ files1/
 *service_account*.json
 *credentials*.json
 *secret*.json
+dashboard/public/api/data.json
+scratch/
