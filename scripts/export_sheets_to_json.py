@@ -45,7 +45,16 @@ def export_sheet_data(
     # Fetch tabs
     try:
         txns_ws = sh.worksheet("Transactions")
-        txns = txns_ws.get_all_records()
+        raw_txns = txns_ws.get_all_records()
+        txns = []
+        for row in raw_txns:
+            if str(row.get("possible_duplicate", "")).strip() == "⚠ Duplicate":
+                continue
+            if "description_raw" in row and len(str(row["description_raw"])) > 120:
+                row["description_raw"] = str(row["description_raw"])[:120].strip()
+            if "description" in row and len(str(row["description"])) > 120:
+                row["description"] = str(row["description"])[:120].strip()
+            txns.append(row)
     except Exception as e:
         print(f"Warning: Could not fetch Transactions tab: {e}")
         txns = []

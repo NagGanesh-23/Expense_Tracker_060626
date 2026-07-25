@@ -38,6 +38,12 @@ def main():
     df = df.drop_duplicates(subset=["transaction_id"], keep="first")
     print(f"Removed {initial_len - len(df)} exact transaction_id duplicates.")
 
+    # 3b. Drop rows flagged as duplicates in possible_duplicate column
+    if "possible_duplicate" in df.columns:
+        initial_len = len(df)
+        df = df[df["possible_duplicate"] != "⚠ Duplicate"]
+        print(f"Removed {initial_len - len(df)} flagged duplicate rows.")
+
     # 4. Add columns if not present
     new_cols = ["description_raw", "merchant_normalized", "review_status"]
     for c in new_cols:
@@ -68,8 +74,11 @@ def main():
         for b in boilerplate:
             if b in s:
                 return s.split(b)[0].strip()
-        return s
+        return s[:120].strip()
 
+    df["description_raw"] = df["description_raw"].apply(
+        lambda d: truncate_corrupted(d)[:120].strip()
+    )
     df["description"] = df["description_raw"].apply(truncate_corrupted)
 
     # 6. Normalize merchant
