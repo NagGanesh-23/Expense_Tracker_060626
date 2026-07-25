@@ -50,10 +50,22 @@ export interface DashboardKPIs {
   topMerchants: { name: string; amount: number }[];
 }
 
-export function parseCategoryMap(rawRows: any[][] | null | undefined): Record<string, string> {
+export function parseCategoryMap(rawRows: any[] | null | undefined): Record<string, string> {
   const map: Record<string, string> = {};
-  if (!rawRows || rawRows.length < 2) return map;
-  
+  if (!rawRows || rawRows.length === 0) return map;
+
+  if (!Array.isArray(rawRows[0])) {
+    rawRows.forEach((row: any) => {
+      const cat = row.category || row.Category || row.CATEGORY;
+      const bucket = row.bucket || row.Bucket || row.BUCKET;
+      if (cat && bucket) {
+        map[String(cat).trim()] = String(bucket).trim();
+      }
+    });
+    return map;
+  }
+
+  if (rawRows.length < 2) return map;
   const headers = rawRows[0].map((h: any) => String(h).trim().toLowerCase());
   const catIdx = headers.indexOf('category');
   const bucketIdx = headers.indexOf('bucket');
@@ -275,25 +287,32 @@ export function computeKPIs(txns: ResolvedTransaction[]): DashboardKPIs {
 }
 
 export function resolveAllTransactions(
-  rawTxns: any[][] | null | undefined,
-  rawCatMap?: any[][] | null | undefined,
-  _rawAliasMap?: any[][] | null | undefined
+  rawTxns: any[] | null | undefined,
+  rawCatMap?: any[] | null | undefined,
+  _rawAliasMap?: any[] | null | undefined
 ): { transactions: ResolvedTransaction[]; kpis: DashboardKPIs } {
-  if (!rawTxns || rawTxns.length < 2) {
+  if (!rawTxns || rawTxns.length === 0 || (rawTxns.length < 2 && Array.isArray(rawTxns[0]))) {
     const mockTxns = getRealisticSampleTransactions();
     return { transactions: mockTxns, kpis: computeKPIs(mockTxns) };
   }
 
   const catMap = parseCategoryMap(rawCatMap);
-  const headers = rawTxns[0].map((h: any) => String(h).trim());
-  
-  const transactions: ResolvedTransaction[] = rawTxns.slice(1).map((row: any[]) => {
-    const obj: Record<string, any> = {};
-    headers.forEach((h: string, idx: number) => {
-      obj[h] = row[idx];
+  let txnsToResolve: Record<string, any>[] = [];
+
+  if (Array.isArray(rawTxns[0])) {
+    const headers = rawTxns[0].map((h: any) => String(h).trim());
+    txnsToResolve = rawTxns.slice(1).map((row: any[]) => {
+      const obj: Record<string, any> = {};
+      headers.forEach((h: string, idx: number) => {
+        obj[h] = row[idx];
+      });
+      return obj;
     });
-    return resolveTransaction(obj, catMap);
-  });
+  } else {
+    txnsToResolve = rawTxns as Record<string, any>[];
+  }
+
+  const transactions: ResolvedTransaction[] = txnsToResolve.map((obj) => resolveTransaction(obj, catMap));
 
   const kpis = computeKPIs(transactions);
   return { transactions, kpis };
