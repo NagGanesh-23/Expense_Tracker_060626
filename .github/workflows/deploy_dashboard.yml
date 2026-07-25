@@ -45,7 +45,7 @@ jobs:
       - name: Set up Python for Google Drive Data Export
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Export Drive Spreadsheet Data to Static JSON
         env:
