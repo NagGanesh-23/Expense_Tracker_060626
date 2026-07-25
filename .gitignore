@@ -14,3 +14,7 @@ audit/
 *.bak*
 files1/
 .gemini/
+.env*
+*service_account*.json
+*credentials*.json
+*secret*.json
