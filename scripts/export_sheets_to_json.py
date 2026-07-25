@@ -17,6 +17,10 @@ def export_sheet_data(
     creds_path = config.get("google_service_account_json") or os.getenv(
         "GOOGLE_SERVICE_ACCOUNT_JSON", "credentials/service_account.json"
     )
+    if not os.path.exists(creds_path) and os.getenv("GOOGLE_CREDS_JSON"):
+        os.makedirs(os.path.dirname(creds_path) or "credentials", exist_ok=True)
+        with open(creds_path, "w", encoding="utf-8") as f:
+            f.write(os.getenv("GOOGLE_CREDS_JSON"))
     sheet_id = config.get("google_sheet_id") or os.getenv(
         "GOOGLE_SHEET_ID", "1gnmlyYsQrzhBDEtsXrdjHZxcU40rzwtZpvSxxx5OSTI"
     )
