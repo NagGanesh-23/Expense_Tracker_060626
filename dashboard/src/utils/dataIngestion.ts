@@ -14,7 +14,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   try {
     let data = null;
     try {
-      const res = await fetch('./api/data.json');
+      const res = await fetch(`./api/data.json?t=${Date.now()}`, { cache: 'no-store' });
       if (res.ok) {
         data = await res.json();
       }
@@ -24,7 +24,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
 
     if (!data) {
       const endpointUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_GSHEETS_READONLY_URL || '/api/data';
-      const res = await fetch(endpointUrl);
+      const res = await fetch(`${endpointUrl}${endpointUrl.includes('?') ? '&' : '?'}t=${Date.now()}`, { cache: 'no-store' });
       if (!res.ok) {
         throw new Error(`Server returned ${res.status} from ${endpointUrl}`);
       }
