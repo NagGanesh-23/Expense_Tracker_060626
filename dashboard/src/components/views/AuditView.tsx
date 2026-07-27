@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { ResolvedTransaction } from '../../utils/dataLayer';
-import { AuditFlagBadge } from '../AuditFlagBadge';
-import { ShieldAlert, ArrowUpDown, Filter, Eye } from 'lucide-react';
+import { VirtualizedTransactionTable } from '../VirtualizedTransactionTable';
+import { ShieldAlert } from 'lucide-react';
 
 interface AuditViewProps {
   transactions: ResolvedTransaction[];
@@ -18,14 +18,6 @@ export function AuditView({ transactions, onSelectCategory, onSelectBank }: Audi
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [selectedTx, setSelectedTx] = useState<ResolvedTransaction | null>(null);
-
-  const formatINR = (val: number) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      maximumFractionDigits: 0,
-    }).format(val);
-  };
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -131,149 +123,18 @@ export function AuditView({ transactions, onSelectCategory, onSelectBank }: Audi
         </div>
       </div>
 
-      {/* Main Table */}
-      <div className="bg-brand-surface border border-brand-border rounded-xl overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-brand-border bg-slate-900/60 text-[11px] font-semibold text-brand-neutral uppercase tracking-wider">
-                <th 
-                  onClick={() => handleSort('date')}
-                  className="py-3 px-4 cursor-pointer hover:text-white transition-colors select-none"
-                >
-                  <div className="flex items-center gap-1">
-                    <span>Date</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-500" />
-                  </div>
-                </th>
-                <th className="py-3 px-4">Account / Bank</th>
-                <th className="py-3 px-4">Description (Truncated per §6)</th>
-                <th 
-                  onClick={() => handleSort('category')}
-                  className="py-3 px-4 cursor-pointer hover:text-white transition-colors select-none"
-                >
-                  <div className="flex items-center gap-1">
-                    <span>Effective Category</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-500" />
-                  </div>
-                </th>
-                <th 
-                  onClick={() => handleSort('amount')}
-                  className="py-3 px-4 text-right cursor-pointer hover:text-white transition-colors select-none"
-                >
-                  <div className="flex items-center justify-end gap-1">
-                    <span>Amount</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-500" />
-                  </div>
-                </th>
-                <th 
-                  onClick={() => handleSort('status')}
-                  className="py-3 px-4 text-center cursor-pointer hover:text-white transition-colors select-none"
-                >
-                  <div className="flex items-center justify-center gap-1">
-                    <span>Audit Status</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-500" />
-                  </div>
-                </th>
-                <th className="py-3 px-4 text-center">Inspect</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-brand-border/60 text-xs">
-              {sortedTxns.length > 0 ? (
-                sortedTxns.map((t) => {
-                  const isSelected = selectedTx?.transaction_id === t.transaction_id;
-                  return (
-                    <tr
-                      key={t.transaction_id || `${t.transaction_date}-${t.amount}-${t.description}`}
-                      onClick={() => setSelectedTx(isSelected ? null : t)}
-                      className={`transition-colors cursor-pointer group ${
-                        isSelected 
-                          ? 'bg-brand-primary/20 border-l-2 border-brand-primary' 
-                          : t.possible_duplicate 
-                            ? 'bg-amber-950/20 hover:bg-amber-950/30' 
-                            : 'hover:bg-brand-surface-hover/80'
-                      }`}
-                    >
-                      {/* Date */}
-                      <td className="py-3.5 px-4 font-mono text-slate-300 whitespace-nowrap">
-                        {t.transaction_date}
-                      </td>
-
-                      {/* Account / Bank */}
-                      <td className="py-3.5 px-4 font-mono">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSelectBank(t.bank);
-                          }}
-                          className="px-2 py-0.5 rounded bg-slate-800 hover:bg-brand-primary text-slate-300 hover:text-white text-[11px] font-medium border border-slate-700 hover:border-brand-primary transition-colors focus:ring-1 focus:ring-brand-primary focus:outline-none"
-                        >
-                          {t.source_account || t.bank}
-                        </button>
-                      </td>
-
-                      {/* Description */}
-                      <td className="py-3.5 px-4 max-w-xs truncate text-white font-medium group-hover:text-blue-300 transition-colors" title={t.description_raw}>
-                        {t.description}
-                      </td>
-
-                      {/* Category */}
-                      <td className="py-3.5 px-4">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSelectCategory(t.effective_category);
-                          }}
-                          className="inline-flex items-center gap-1 text-slate-200 hover:text-white font-medium hover:underline decoration-brand-primary underline-offset-2"
-                        >
-                          <span>{t.effective_category}</span>
-                          <Filter className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity text-brand-primary" />
-                        </button>
-                      </td>
-
-                      {/* Amount */}
-                      <td className={`py-3.5 px-4 text-right font-mono font-bold ${t.is_spend ? 'text-white' : 'text-emerald-400'}`}>
-                        {formatINR(t.amount)}
-                      </td>
-
-                      {/* Status Badge */}
-                      <td className="py-3.5 px-4 text-center">
-                        <AuditFlagBadge
-                          possibleDuplicate={t.possible_duplicate}
-                          needsReview={t.needs_review}
-                          reviewStatus={t.review_status}
-                        />
-                      </td>
-
-                      {/* Inspect Button */}
-                      <td className="py-3.5 px-4 text-center">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedTx(isSelected ? null : t);
-                          }}
-                          className={`p-1.5 rounded-lg transition-colors focus:ring-2 focus:ring-brand-primary focus:outline-none ${
-                            isSelected ? 'bg-brand-primary text-white' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white'
-                          }`}
-                          title="Inspect raw bank memo and audit trail"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={7} className="py-8 text-center text-brand-neutral">
-                    No transactions matching the active audit filter tab.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* Main Virtualized Table */}
+      <VirtualizedTransactionTable
+        transactions={sortedTxns}
+        selectedTxId={selectedTx?.transaction_id}
+        onSelectTransaction={(t) => setSelectedTx(selectedTx?.transaction_id === t.transaction_id ? null : t)}
+        onSelectCategory={onSelectCategory}
+        onSelectBank={onSelectBank}
+        onSort={(col) => handleSort(col as SortField)}
+        sortColumn={sortField}
+        sortDirection={sortOrder}
+        height="600px"
+      />
 
       {/* Transaction Inspection Drawer / Modal */}
       {selectedTx && (

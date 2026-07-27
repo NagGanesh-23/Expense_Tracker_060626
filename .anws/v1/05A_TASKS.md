@@ -103,7 +103,7 @@ graph TD
 
 ## INT 集成验证任务
 
-- [ ] **INT-S1** [MILESTONE]: S1 集成验证 — End-to-End Pipeline
+- [x] **INT-S1** [MILESTONE]: S1 集成验证 — End-to-End Pipeline
   - **描述**: Validate the entire CLI command flow locally.
   - **输入**: All previous tasks.
   - **输出**: E2E test report.
@@ -159,7 +159,7 @@ graph TD
     - `scripts/dev-tools/terminal_peek.py`: CLI terminal inspection utility.
   - **优先级**: P2
 
-- [ ] **DASH-v1.1** [REQ-DASHBOARD]: Interactive Expense Dashboard
+- [x] **DASH-v1.1** [REQ-DASHBOARD]: Interactive Expense Dashboard
   - **描述**: Implement an interactive analytics dashboard (read-only) with strict data resolution rules, 5 reactive views, and zero recurring cost.
   - **输入**: `PRD_Interactive_Expense_Dashboard.md`, `Transactions`, `Category_Map`, and `Merchant_Aliases` tabs in Google Sheets.
   - **输出**: Dashboard data layer (`dashboard/src/utils/dataLayer.ts` or equivalent API layer), frontend views, and comprehensive unit tests.
@@ -169,4 +169,30 @@ graph TD
     - Descriptions are truncated to ~60 characters.
     - 5 reactive views (Overview, Categories, Banks, Classification Health, Audit/Anomalies) filter live without reload.
   - **优先级**: P1
+
+- [x] **DASH-ARCH-P1** [REQ-REF-P1]: Phased Architectural Refactor (Phase 1 — High Priority)
+  - **描述**: Split dashboard into multiple feature views with lazy loading, fix custom date from/to filtering, add top-right settings dropdown with developer toggle, move aggregation to Node.js backend, version REST endpoints (`/api/v1/...`), enable Brotli/Gzip compression, and virtualize transaction tables.
+  - **输入**: User architectural proposal & feedback.
+  - **输出**: Modular server routes, virtualized table components, and fixed date filtering.
+  - **验收标准**:
+    - Given custom Date From and Date To filter selections, transactions and KPIs filter accurately against `transaction_date`.
+    - Developer toggle resides in top-right settings dropdown and cleanly hides/reveals System Health view.
+    - API responses use Brotli/Gzip compression and render via virtualized DOM tables smoothly.
+  - **优先级**: P1
+
+- [x] **DASH-ARCH-P2** [REQ-REF-P2]: Phased Architectural Refactor (Phase 2 — Medium Priority)
+  - **描述**: Integrate `better-sqlite3` structured database abstraction, `@tanstack/react-query` server state management, feature-based project folder reorganization, backend in-memory TTL caching, and runtime Zod payload validation.
+  - **输入**: Phase 1 deliverables.
+  - **输出**: `StorageRepository` SQLite implementation, `apiClient.ts` with Zod schemas, feature-based structure under `src/features/*`.
+  - **验收标准**:
+    - Given backend queries, SQLite executes local aggregations with sub-millisecond response times.
+    - Frontend queries leverage React Query caching and Zod schema validation.
+  - **优先级**: P2
+
+- [x] **DASH-ARCH-OPT** [REQ-REF-OPT]: Observability & Regression Testing
+  - **描述**: Implement browser Performance API timing instrumentation and comprehensive automated tests.
+  - **输出**: `observability.ts`, API endpoint regression tests, QA verification check passes.
+  - **验收标准**:
+    - All existing Python tests (`pytest`), TypeScript QA checks (`npm run test:qa`), and API regression tests pass 100%.
+  - **优先级**: P2
 

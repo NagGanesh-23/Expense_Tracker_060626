@@ -1,4 +1,5 @@
 import { LayoutDashboard, PieChart, Building2, Activity, ShieldAlert } from 'lucide-react';
+import { HeaderSettingsMenu } from './HeaderSettingsMenu';
 
 export type TabId = 'overview' | 'categories' | 'banks' | 'health' | 'audit';
 
@@ -6,10 +7,12 @@ interface NavigationTabsProps {
   activeTab: TabId;
   onSelectTab: (tab: TabId) => void;
   auditFlagCount: number;
+  isDevMode?: boolean;
+  onToggleDevMode?: () => void;
 }
 
-export function NavigationTabs({ activeTab, onSelectTab, auditFlagCount }: NavigationTabsProps) {
-  const tabs: { id: TabId; label: string; icon: React.ReactNode; count?: number }[] = [
+export function NavigationTabs({ activeTab, onSelectTab, auditFlagCount, isDevMode = true, onToggleDevMode }: NavigationTabsProps) {
+  const allTabs: { id: TabId; label: string; icon: React.ReactNode; count?: number }[] = [
     { id: 'overview', label: 'Overview', icon: <LayoutDashboard className="w-4 h-4" /> },
     { id: 'categories', label: 'Categories', icon: <PieChart className="w-4 h-4" /> },
     { id: 'banks', label: 'Bank Accounts', icon: <Building2 className="w-4 h-4" /> },
@@ -21,6 +24,8 @@ export function NavigationTabs({ activeTab, onSelectTab, auditFlagCount }: Navig
       count: auditFlagCount > 0 ? auditFlagCount : undefined 
     },
   ];
+
+  const tabs = isDevMode ? allTabs : allTabs.filter(t => t.id !== 'health');
 
   return (
     <div className="bg-[#0F172A] border-b border-brand-border px-6 pt-3">
@@ -35,7 +40,7 @@ export function NavigationTabs({ activeTab, onSelectTab, auditFlagCount }: Navig
         </div>
 
         {/* Tab Buttons */}
-        <div className="flex items-center gap-1 min-w-max" role="tablist">
+        <div className="flex items-center gap-1 flex-1 min-w-max" role="tablist">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
             return (
@@ -63,6 +68,13 @@ export function NavigationTabs({ activeTab, onSelectTab, auditFlagCount }: Navig
             );
           })}
         </div>
+
+        {/* Right: Settings Dropdown */}
+        {onToggleDevMode && (
+          <div className="flex items-center pb-1 pl-4 border-l border-brand-border/60">
+            <HeaderSettingsMenu isDevMode={Boolean(isDevMode)} onToggleDevMode={onToggleDevMode} />
+          </div>
+        )}
 
       </div>
     </div>

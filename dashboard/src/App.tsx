@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import { fetchDashboardData } from './utils/dataIngestion';
 import type { DashboardData } from './utils/dataIngestion';
 import { filterTransactions, computeKPIs } from './utils/dataLayer';
@@ -10,13 +10,13 @@ import type { FilterState } from './components/GlobalFilterBar';
 import { NavigationTabs } from './components/NavigationTabs';
 import type { TabId } from './components/NavigationTabs';
 
-// Phase 3 views
-import { OverviewView } from './components/views/OverviewView';
-import { CategoriesView } from './components/views/CategoriesView';
-import { BanksView } from './components/views/BanksView';
-import { HealthView } from './components/views/HealthView';
-import { AuditView } from './components/views/AuditView';
-import { EmptyState } from './components/views/EmptyState';
+// Phase 3 views (Lazy Loaded from feature modules for code-splitting and performance)
+const OverviewView = lazy(() => import('./features/overview').then(m => ({ default: m.OverviewView })));
+const CategoriesView = lazy(() => import('./features/analytics').then(m => ({ default: m.CategoriesView })));
+const BanksView = lazy(() => import('./features/accounts').then(m => ({ default: m.BanksView })));
+const HealthView = lazy(() => import('./features/health').then(m => ({ default: m.HealthView })));
+const AuditView = lazy(() => import('./features/transactions').then(m => ({ default: m.AuditView })));
+const EmptyState = lazy(() => import('./components/views/EmptyState').then(m => ({ default: m.EmptyState })));
 
 const INITIAL_FILTERS: FilterState = {
   bank: 'All',
@@ -32,6 +32,17 @@ function App() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
+  const [isDevMode, setIsDevMode] = useState(true);
+
+  const handleToggleDevMode = () => {
+    setIsDevMode((prev) => {
+      const next = !prev;
+      if (!next && activeTab === 'health') {
+        setActiveTab('overview');
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     fetchDashboardData().then((d) => {
@@ -82,6 +93,8 @@ function App() {
         activeTab={activeTab}
         onSelectTab={setActiveTab}
         auditFlagCount={filteredKpis.possibleDuplicatesCount + filteredKpis.needsReviewCount}
+        isDevMode={isDevMode}
+        onToggleDevMode={handleToggleDevMode}
       />
 
       {/* 3. Sticky Global Filter Bar */}
@@ -98,56 +111,58 @@ function App() {
 
       {/* 4. Main View Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8">
-        {filteredTransactions.length === 0 ? (
-          <EmptyState onResetFilters={handleResetFilters} />
-        ) : (
-          <>
-            {activeTab === 'overview' && (
-              <OverviewView
-                transactions={filteredTransactions}
-                kpis={filteredKpis}
-                onSelectCategory={(cat) => {
-                  handleFilterChange({ category: cat });
-                }}
-              />
-            )}
+        <Suspense fallback={<div className="flex items-center justify-center h-64 text-brand-neutral font-mono text-sm animate-pulse">Loading view...</div>}>
+          {filteredTransactions.length === 0 ? (
+            <EmptyState onResetFilters={handleResetFilters} />
+          ) : (
+            <>
+              {activeTab === 'overview' && (
+                <OverviewView
+                  transactions={filteredTransactions}
+                  kpis={filteredKpis}
+                  onSelectCategory={(cat) => {
+                    handleFilterChange({ category: cat });
+                  }}
+                />
+              )}
 
-            {activeTab === 'categories' && (
-              <CategoriesView
-                transactions={filteredTransactions}
-                kpis={filteredKpis}
-                onSelectCategory={(cat) => {
-                  handleFilterChange({ category: cat });
-                  setActiveTab('overview'); // Drill into overview or stay
-                }}
-              />
-            )}
+              {activeTab === 'categories' && (
+                <CategoriesView
+                  transactions={filteredTransactions}
+                  kpis={filteredKpis}
+                  onSelectCategory={(cat) => {
+                    handleFilterChange({ category: cat });
+                    setActiveTab('overview'); // Drill into overview or stay
+                  }}
+                />
+              )}
 
-            {activeTab === 'banks' && (
-              <BanksView
-                kpis={filteredKpis}
-                onSelectBank={(bank) => {
-                  handleFilterChange({ bank });
-                }}
-              />
-            )}
+              {activeTab === 'banks' && (
+                <BanksView
+                  kpis={filteredKpis}
+                  onSelectBank={(bank) => {
+                    handleFilterChange({ bank });
+                  }}
+                />
+              )}
 
-            {activeTab === 'health' && (
-              <HealthView
-                kpis={filteredKpis}
-                totalTransactions={filteredTransactions.length}
-              />
-            )}
+              {activeTab === 'health' && isDevMode && (
+                <HealthView
+                  kpis={filteredKpis}
+                  totalTransactions={filteredTransactions.length}
+                />
+              )}
 
-            {activeTab === 'audit' && (
-              <AuditView
-                transactions={filteredTransactions}
-                onSelectCategory={(cat) => handleFilterChange({ category: cat })}
-                onSelectBank={(bank) => handleFilterChange({ bank })}
-              />
-            )}
-          </>
-        )}
+              {activeTab === 'audit' && (
+                <AuditView
+                  transactions={filteredTransactions}
+                  onSelectCategory={(cat) => handleFilterChange({ category: cat })}
+                  onSelectBank={(bank) => handleFilterChange({ bank })}
+                />
+              )}
+            </>
+          )}
+        </Suspense>
       </main>
 
       {/* Footer */}

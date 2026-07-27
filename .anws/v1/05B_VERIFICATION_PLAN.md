@@ -79,6 +79,35 @@ Agents must run these verification gates before generating a final diff:
 - **断言**: GSheets API 调用次数为 0，本地生成审计文件。
 - **证据**: `tests/integration/test_gsheets.py`
 
+### T1.4.1 & T1.4.3
+- **关联需求**: REQ-FEEDBACK & REQ-RETRAIN (Continuous Learning & Retrain Trigger)
+- **关联契约**: 持续学习反馈同步与重新训练触发契约
+- **风险类别**: 训练数据污染 / 重复触发
+- **单元与集成测试覆盖**:
+  - 验证 `feedback_sync.py` 正确识别 `review_status = 'corrected'` 并在同步后打上 `'synced'` 标记
+  - 验证达到 `retrain_trigger_count` 时自动触发模型重训，未达到时正确输出剩余所需条数
+- **断言**: `training_data.csv` 成功追加记录，状态准确更新。
+- **证据**: `tests/unit/test_feedback_sync.py`, `tests/integration/test_gsheets.py`
+
+### T1.4.2 & T1.4.4
+- **关联需求**: REQ-SETUP & REQ-UTILS (GSheets Setup & Dev Utilities)
+- **关联契约**: 表单格式化与审计安全契约
+- **风险类别**: 格式化破坏历史记录 / 误报异常
+- **单元测试覆盖**:
+  - 验证 `audit_output.py` 对 `audit_optional_fields` 白名单正确放行，且准确标记空白 `review_status`
+- **断言**: 审计通过合规白名单检查，无误报。
+- **证据**: `tests/unit/test_audit_output.py`
+
+### DASH-v1.1
+- **关联需求**: REQ-DASHBOARD (Interactive Expense Dashboard)
+- **关联契约**: 数据层解析与响应契约
+- **风险类别**: 分类映射失效 / 转账账目计入总支出
+- **单元测试覆盖**:
+  - 验证 `dataLayer.ts` 规则对应 Python 模型对类别重定向与失效桶重写（Stale Bucket Override）
+  - 验证转账记录过滤规则、描述文本截断（~60字）及账户衍生逻辑
+- **断言**: 六项核心数据逻辑解析准确度 100%。
+- **证据**: `tests/unit/test_dashboard_data_layer.py`
+
 ---
 
 ## 6. Contract Coverage Overlay
@@ -88,6 +117,9 @@ Agents must run these verification gates before generating a final diff:
 | 统一数据格式 Schema | 数据契约 | T1.1.2 | T1.1.2 单元测试 | ✅ |
 | 分类器级联规则 | 业务逻辑 | T1.2.1 | T1.2.1 集成测试 | ✅ |
 | Google Sheets Write API | HTTP API | T1.3.1 | T1.3.1 `--dry-run` 测试 | ✅ |
+| 持续学习同步与重训规则 | 业务逻辑 | T1.4.1 / T1.4.3 | `test_feedback_sync.py` | ✅ |
+| 表单审计白名单规则 | 数据契约 | T1.4.4 | `test_audit_output.py` | ✅ |
+| 仪表盘动态数据解析规则 | 前端契约 | DASH-v1.1 | `test_dashboard_data_layer.py` | ✅ |
 
 ## 7. Testing Coverage Overlay
 
@@ -96,6 +128,9 @@ Agents must run these verification gates before generating a final diff:
 | Parser 解析完整性 | 数据丢失 | 单元测试 + Mock Files | T1.1.1 | `tests/unit/test_parsers.py` | ✅ |
 | 避免 LLM 成本泄漏 | API 滥用 | 级联集成测试 + Mock | T1.2.1 | `tests/unit/test_classifiers.py` | ✅ |
 | 防止污染生产表格 | 生产数据破坏 | Dry-run mock 断言 | T1.3.1 | `tests/integration/test_gsheets.py` | ✅ |
+| 反馈闭环数据安全 | 训练集污染 | 单元 + 集成 Mock | T1.4.1/3 | `test_feedback_sync.py` | ✅ |
+| 审计告警白名单校验 | 虚假异常报告 | 单元测试断言 | T1.4.4 | `test_audit_output.py` | ✅ |
+| 仪表盘指标准确性 | 统计数据错误 | 解析规则一致性测试 | DASH-v1.1 | `test_dashboard_data_layer.py` | ✅ |
 
 ## 8. Verification Traceability Matrix
 
@@ -105,3 +140,8 @@ Agents must run these verification gates before generating a final diff:
 | REQ-NORM Schema标准化 | T1.1.2 | 单元测试 | `tests/unit/test_normalizer.py` | Pytest Output | ✅ |
 | REQ-CLASS 级联安全 | T1.2.1 | 集成测试 | `tests/unit/test_classifiers.py` | Pytest Output | ✅ |
 | REQ-OUT 审计与干跑安全 | T1.3.1 | 集成测试 | `tests/integration/test_gsheets.py` | Pytest Output | ✅ |
+| REQ-FEEDBACK 反馈闭环 | T1.4.1 | 单元/集成 | `tests/unit/test_feedback_sync.py` | Pytest Output | ✅ |
+| REQ-SETUP 表单验证设置 | T1.4.2 | 集成测试 | `tests/integration/test_gsheets.py` | Pytest Output | ✅ |
+| REQ-RETRAIN 自动重训触发 | T1.4.3 | 单元/集成 | `tests/unit/test_feedback_sync.py` | Pytest Output | ✅ |
+| REQ-UTILS 辅助脚本合规 | T1.4.4 | 单元测试 | `tests/unit/test_audit_output.py` | Pytest Output | ✅ |
+| REQ-DASHBOARD 数据层规则 | DASH-v1.1 | 单元测试 | `test_dashboard_data_layer.py` | Pytest Output | ✅ |

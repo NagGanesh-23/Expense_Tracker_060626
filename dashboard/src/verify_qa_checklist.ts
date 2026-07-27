@@ -163,6 +163,17 @@ check(
   `Search match count=${filteredBySearch.length}`
 );
 
+const filteredByCustomDate = filterTransactions(allTxns, { bank: "All", category: "All", searchTerm: "", onlyFlagged: false, dateRange: "custom", dateFrom: "2026-05-20", dateTo: "2026-05-21" });
+const filteredByThisMonth = filterTransactions(allTxns, { bank: "All", category: "All", searchTerm: "", onlyFlagged: false, dateRange: "this_month" });
+check(
+  "AC 5: Custom Date Range & Preset Filtering Consistency",
+  filteredByCustomDate.length > 0 &&
+  filteredByCustomDate.every(t => t.transaction_date >= "2026-05-20" && t.transaction_date <= "2026-05-21") &&
+  filteredByThisMonth.length > 0 &&
+  filteredByThisMonth.every(t => t.transaction_date.startsWith("2026-05")),
+  `Custom range count=${filteredByCustomDate.length}, This month count=${filteredByThisMonth.length}`
+);
+
 console.log("\n================================================================");
 console.log(`FINAL RESULT: ${passCount} PASSED | ${failCount} FAILED`);
 console.log("================================================================");

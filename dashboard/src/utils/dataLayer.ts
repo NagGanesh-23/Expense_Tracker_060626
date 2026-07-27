@@ -319,6 +319,36 @@ export function resolveAllTransactions(
 }
 
 export function filterTransactions(txns: ResolvedTransaction[], filters: FilterState): ResolvedTransaction[] {
+  // Find reference date (latest transaction date in dataset, or current date if empty)
+  let refDateStr = '2026-05-31';
+  if (txns && txns.length > 0) {
+    const validDates = txns.map(t => t.transaction_date).filter(Boolean).sort();
+    if (validDates.length > 0) {
+      refDateStr = validDates[validDates.length - 1];
+    }
+  }
+  const refYear = refDateStr.substring(0, 4);
+  const refMonth = refDateStr.substring(5, 7);
+  const refYearNum = parseInt(refYear, 10);
+  const refMonthNum = parseInt(refMonth, 10);
+
+  // Calculate last month and last 3 months boundaries
+  let lastMonthNum = refMonthNum - 1;
+  let lastMonthYearNum = refYearNum;
+  if (lastMonthNum < 1) {
+    lastMonthNum = 12;
+    lastMonthYearNum -= 1;
+  }
+  const lastMonthStr = `${lastMonthYearNum}-${String(lastMonthNum).padStart(2, '0')}`;
+
+  let threeMonthsAgoNum = refMonthNum - 2;
+  let threeMonthsAgoYearNum = refYearNum;
+  while (threeMonthsAgoNum < 1) {
+    threeMonthsAgoNum += 12;
+    threeMonthsAgoYearNum -= 1;
+  }
+  const threeMonthsAgoStr = `${threeMonthsAgoYearNum}-${String(threeMonthsAgoNum).padStart(2, '0')}-01`;
+
   return txns.filter((t) => {
     // Bank filter
     if (filters.bank !== 'All' && t.bank.toUpperCase() !== filters.bank.toUpperCase()) {
@@ -344,14 +374,35 @@ export function filterTransactions(txns: ResolvedTransaction[], filters: FilterS
       }
     }
     // Date range filter
-    if (filters.dateRange !== 'all') {
-      // Simple string/year/month filter approximation for demo
-      const nowYear = '2026';
-      if (filters.dateRange === 'this_month' && (t.month !== '05' && t.month !== '5' && t.month !== 'May')) {
-        return false;
+    if (filters.dateRange === 'custom' || filters.dateFrom || filters.dateTo) {
+      if (filters.dateFrom && filters.dateFrom.trim() !== '') {
+        if (t.transaction_date < filters.dateFrom.trim()) {
+          return false;
+        }
       }
-      if (filters.dateRange === 'ytd' && t.year !== nowYear && t.year !== '26') {
-        return false;
+      if (filters.dateTo && filters.dateTo.trim() !== '') {
+        if (t.transaction_date > filters.dateTo.trim()) {
+          return false;
+        }
+      }
+    } else if (filters.dateRange !== 'all') {
+      const txDate = t.transaction_date || '';
+      if (filters.dateRange === 'this_month') {
+        if (!txDate.startsWith(`${refYear}-${refMonth}`)) {
+          return false;
+        }
+      } else if (filters.dateRange === 'last_month') {
+        if (!txDate.startsWith(lastMonthStr)) {
+          return false;
+        }
+      } else if (filters.dateRange === 'last_3_months') {
+        if (txDate < threeMonthsAgoStr || txDate > refDateStr) {
+          return false;
+        }
+      } else if (filters.dateRange === 'ytd') {
+        if (!txDate.startsWith(refYear)) {
+          return false;
+        }
       }
     }
     return true;

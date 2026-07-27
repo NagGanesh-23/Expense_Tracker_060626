@@ -5,7 +5,9 @@ export interface FilterState {
   category: string;
   searchTerm: string;
   onlyFlagged: boolean;
-  dateRange: 'all' | 'this_month' | 'last_month' | 'last_3_months' | 'ytd';
+  dateRange: 'all' | 'this_month' | 'last_month' | 'last_3_months' | 'ytd' | 'custom';
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 interface GlobalFilterBarProps {
@@ -27,6 +29,7 @@ const DATE_PRESETS: { id: FilterState['dateRange']; label: string }[] = [
   { id: 'last_month', label: 'Last Month' },
   { id: 'last_3_months', label: 'Last 3 Months' },
   { id: 'ytd', label: 'YTD' },
+  { id: 'custom', label: 'Custom Range' },
 ];
 
 export function GlobalFilterBar({
@@ -44,7 +47,9 @@ export function GlobalFilterBar({
     filters.category !== 'All' ||
     filters.searchTerm !== '' ||
     filters.onlyFlagged ||
-    filters.dateRange !== 'all';
+    filters.dateRange !== 'all' ||
+    Boolean(filters.dateFrom) ||
+    Boolean(filters.dateTo);
 
   return (
     <div className="sticky top-0 z-30 bg-[#0F172A]/95 backdrop-blur-md border-b border-brand-border px-6 py-2.5 shadow-md">
@@ -72,6 +77,25 @@ export function GlobalFilterBar({
               );
             })}
           </div>
+
+          {filters.dateRange === 'custom' && (
+            <div className="flex items-center gap-1.5 bg-brand-surface border border-brand-primary/40 rounded-lg px-2 py-1 shadow-sm">
+              <span className="text-[11px] text-brand-neutral font-medium">From:</span>
+              <input
+                type="date"
+                value={filters.dateFrom || ''}
+                onChange={(e) => onFilterChange({ dateFrom: e.target.value })}
+                className="bg-transparent text-[11px] text-slate-200 border-none focus:outline-none focus:ring-0 cursor-pointer font-mono"
+              />
+              <span className="text-[11px] text-brand-neutral font-medium">To:</span>
+              <input
+                type="date"
+                value={filters.dateTo || ''}
+                onChange={(e) => onFilterChange({ dateTo: e.target.value })}
+                className="bg-transparent text-[11px] text-slate-200 border-none focus:outline-none focus:ring-0 cursor-pointer font-mono"
+              />
+            </div>
+          )}
 
           <div className="h-4 w-px bg-brand-border mx-0.5 hidden sm:block" />
 
