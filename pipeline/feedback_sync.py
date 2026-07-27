@@ -56,8 +56,6 @@ class FeedbackSync:
 
         required_headers = [
             "review_status",
-            "reviewed_category",
-            "reviewed_at",
             "category",
             "transaction_date",
             "description",
@@ -214,8 +212,15 @@ class FeedbackSync:
             if len(row) < len(headers):
                 row.extend([""] * (len(headers) - len(row)))
 
-            reviewed_cat = row[header_map["reviewed_category"]].strip()
-            base_cat = row[header_map["category"]].strip()
+            def get_val(col_name):
+                return (
+                    row[header_map[col_name]].strip()
+                    if col_name in header_map and header_map[col_name] < len(row)
+                    else ""
+                )
+
+            reviewed_cat = get_val("reviewed_category")
+            base_cat = get_val("category")
 
             # Ground truth is reviewed_category if present, else category
             final_cat = reviewed_cat if reviewed_cat else base_cat
@@ -228,11 +233,11 @@ class FeedbackSync:
                 continue
 
             record = {
-                "transaction_date": row[header_map["transaction_date"]],
-                "description": row[header_map["description"]],
-                "amount": row[header_map["amount"]],
-                "transaction_type": row[header_map["transaction_type"]],
-                "source_account": row[header_map["source_account"]],
+                "transaction_date": get_val("transaction_date"),
+                "description": get_val("description"),
+                "amount": get_val("amount"),
+                "transaction_type": get_val("transaction_type"),
+                "source_account": get_val("source_account"),
                 "category": final_cat,
             }
             new_training_records.append(record)
