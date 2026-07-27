@@ -14,10 +14,16 @@ def setup_sheet(config_path: str = "config.yaml"):
     else:
         config = {}
 
-    creds_path = config.get("google_service_account_json") or os.getenv(
-        "GOOGLE_SERVICE_ACCOUNT_JSON"
+    creds_path = (
+        config.get("google_service_account_json")
+        or os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+        or "credentials/service_account.json"
     )
-    sheet_id = config.get("google_sheet_id") or os.getenv("GOOGLE_SHEET_ID")
+    sheet_id = (
+        config.get("google_sheet_id")
+        or os.getenv("GOOGLE_SHEET_ID")
+        or "1gnmlyYsQrzhBDEtsXrdjHZxcU40rzwtZpvSxxx5OSTI"
+    )
     threshold = config.get("review_confidence_threshold", 0.70)
 
     scopes = [
