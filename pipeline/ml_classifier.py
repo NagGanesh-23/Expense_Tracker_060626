@@ -80,8 +80,11 @@ class MLClassifier:
     """
 
     def __init__(self, config_path: str = "config.yaml"):
-        with open(config_path, "r") as file:
-            self.config = yaml.safe_load(file)
+        if os.path.exists(config_path):
+            with open(config_path, "r") as file:
+                self.config = yaml.safe_load(file) or {}
+        else:
+            self.config = {}
 
         self.threshold = self.config.get("ml_confidence_threshold", 0.85)
         self.fuzzy_threshold = self.config.get("ml_fuzzy_threshold", 90)
