@@ -17,11 +17,15 @@ class GoogleSheetsWriter:
         else:
             self.config = {}
 
-        self.creds_path = self.config.get("google_service_account_json") or os.getenv(
-            "GOOGLE_SERVICE_ACCOUNT_JSON"
+        self.creds_path = (
+            self.config.get("google_service_account_json")
+            or os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+            or "credentials/service_account.json"
         )
-        self.sheet_id = self.config.get("google_sheet_id") or os.getenv(
-            "GOOGLE_SHEET_ID"
+        self.sheet_id = (
+            self.config.get("google_sheet_id")
+            or os.getenv("GOOGLE_SHEET_ID")
+            or "1gnmlyYsQrzhBDEtsXrdjHZxcU40rzwtZpvSxxx5OSTI"
         )
 
         self.scopes = [

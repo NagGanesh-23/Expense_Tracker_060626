@@ -1,54 +1,52 @@
 import express from 'express';
 import cors from 'cors';
-import { google } from 'googleapis';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import compression from 'compression';
+import { getRawSheetsData, getSummary, getFilteredTransactions } from './server/services/aggregationService.js';
 
 const app = express();
-const port = 3001;
+const port = process.env.PORT || 3001;
 
+// Enable CORS and Brotli/Gzip response compression
 app.use(cors());
+app.use(compression());
 
-// The path to your service account key file relative to the server script
-const KEY_FILE_PATH = path.join(__dirname, '..', 'credentials', 'service_account.json');
-
-// The spreadsheet ID from config.yaml
-const SPREADSHEET_ID = '1gnmlyYsQrzhBDEtsXrdjHZxcU40rzwtZpvSxxx5OSTI';
-
-// Authenticate with Google
-const auth = new google.auth.GoogleAuth({
-  keyFile: KEY_FILE_PATH,
-  scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+// v1 REST API: Backend Aggregation Layer
+app.get('/api/v1/summary', async (req, res) => {
+  try {
+    const forceRefresh = req.query.refresh === 'true';
+    const summary = await getSummary(req.query, forceRefresh);
+    res.json(summary);
+  } catch (error) {
+    console.error('Error in /api/v1/summary:', error);
+    res.status(500).json({ error: 'Failed to compute summary' });
+  }
 });
 
-const sheets = google.sheets({ version: 'v4', auth });
+app.get('/api/v1/transactions', async (req, res) => {
+  try {
+    const forceRefresh = req.query.refresh === 'true';
+    const txns = await getFilteredTransactions(req.query, forceRefresh);
+    res.json(txns);
+  } catch (error) {
+    console.error('Error in /api/v1/transactions:', error);
+    res.status(500).json({ error: 'Failed to fetch transactions' });
+  }
+app.post('/api/v1/sync', async (req, res) => {
+  try {
+    const raw = await getRawSheetsData(true);
+    res.json({ status: 'success', message: `Synced ${raw.transactions.length} rows to SQLite` });
+  } catch (error) {
+    console.error('Error in /api/v1/sync:', error);
+    res.status(500).json({ error: 'Failed to sync data' });
+  }
+});
 
+// Legacy raw data endpoint (caching enabled)
 app.get('/api/data', async (req, res) => {
   try {
-    // Fetch data from the three tabs
-    const [transactionsRes, aliasesRes, categoriesRes] = await Promise.all([
-      sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'Transactions', 
-      }),
-      sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'Merchant_Aliases', // Update if tab name differs
-      }).catch(() => ({ data: { values: null } })), // Fallback if tab doesn't exist
-      sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'Category_Map', // Update if tab name differs
-      }).catch(() => ({ data: { values: null } }))
-    ]);
-
-    res.json({
-      transactions: transactionsRes.data.values || [],
-      merchantAliases: aliasesRes.data.values || [],
-      categoryMap: categoriesRes.data.values || []
-    });
+    const forceRefresh = req.query.refresh === 'true';
+    const raw = await getRawSheetsData(forceRefresh);
+    res.json(raw);
   } catch (error) {
     console.error('Error fetching data from Google Sheets:', error);
     res.status(500).json({ error: 'Failed to fetch data' });

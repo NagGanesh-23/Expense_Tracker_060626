@@ -10,6 +10,7 @@ import {
   Cell,
 } from 'recharts';
 import type { ResolvedTransaction, DashboardKPIs } from '../../utils/dataLayer';
+import { VirtualizedTransactionTable } from '../VirtualizedTransactionTable';
 import { TrendingUp, PieChart as PieIcon, ShoppingBag, ArrowUpRight } from 'lucide-react';
 
 interface OverviewViewProps {
@@ -235,6 +236,24 @@ export function OverviewView({ transactions, kpis, onSelectCategory }: OverviewV
           </div>
         </div>
 
+      </div>
+
+      {/* Recent Transactions Section (Virtualized Preview) */}
+      <div className="mt-6 bg-brand-surface border border-brand-border rounded-xl p-5 shadow-sm">
+        <div className="flex items-center justify-between border-b border-brand-border pb-4 mb-4">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-brand-primary"></span>
+            <h3 className="text-base font-semibold text-white">Recent Transactions (Virtualized Preview)</h3>
+          </div>
+          <span className="text-xs font-mono text-brand-neutral bg-slate-800 px-2.5 py-1 rounded-md border border-slate-700">
+            Top 50 recent
+          </span>
+        </div>
+        <VirtualizedTransactionTable
+          transactions={transactions.slice(0, 50)}
+          onSelectCategory={onSelectCategory}
+          height="350px"
+        />
       </div>
 
     </div>
