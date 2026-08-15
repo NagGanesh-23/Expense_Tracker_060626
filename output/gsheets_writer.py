@@ -223,9 +223,9 @@ class GoogleSheetsWriter:
 
         # Ensure description_raw exists
         if "description_raw" not in df.columns:
-            df["description_raw"] = ""
+            df["description_raw"] = df["description"]
         mask = df["description_raw"] == ""
-        df.loc[mask, "description_raw"] = df.loc[mask, "description"]
+        df.loc[mask, "description_raw"] = "NO DESCRIPTION"
 
         # Apply truncation heuristic for future rows
         def truncate_corrupted(desc):
@@ -247,7 +247,7 @@ class GoogleSheetsWriter:
                     return s.split(b)[0].strip()
             return s
 
-        df["description"] = df["description_raw"].apply(truncate_corrupted)
+        df["description"] = df["description"].apply(truncate_corrupted)
 
         # Normalize merchant using basic rules or alias map
         def normalize_merchant(desc):

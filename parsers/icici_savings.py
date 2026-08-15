@@ -153,6 +153,8 @@ class ICICISavingsParser(BaseParser):
                 remarks_lines.append(all_lines[r_idx][0])
 
             remarks = " ".join(remarks_lines).strip()
+            if remarks == "None" or remarks == "":
+                remarks = "NO DESCRIPTION"
 
             # Bounding box of the amount word
             # DEPOSITS (credit) column x0 is ~370-390, WITHDRAWALS (debit) column x0 is > 450
@@ -170,7 +172,7 @@ class ICICISavingsParser(BaseParser):
                 "transaction_date": parsed_date.strftime("%Y-%m-%d"),
                 "value_date": None,
                 "description": remarks,
-                "raw_description": remarks,
+                "description_raw": remarks,
                 "amount": amount,
                 "transaction_type": txn_type,
                 "balance": balance,

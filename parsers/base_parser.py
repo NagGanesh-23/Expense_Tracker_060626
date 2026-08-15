@@ -31,7 +31,7 @@ class BaseParser(ABC):
         """
         date_str = str(txn.get("transaction_date", ""))
         amt_str = str(txn.get("amount", ""))
-        desc_str = str(txn.get("raw_description", "")).strip().lower()
+        desc_str = str(txn.get("description_raw", "")).strip().lower()
         src_str = str(txn.get("source_account", ""))
         ref_no = str(txn.get("ref_no", "")).strip()
 
@@ -82,7 +82,7 @@ class BaseParser(ABC):
                 "transaction_date",
                 "value_date",
                 "description",
-                "raw_description",
+                "description_raw",
                 "amount",
                 "transaction_type",
                 "balance",

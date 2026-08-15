@@ -38,6 +38,8 @@ class AxisMyZoneParser(BaseParser):
 
                     # FIX: description is at index 2 (not 1 — index 1 is always None)
                     raw_desc = str(row[2]).replace("\n", " ").strip()
+                    if raw_desc == "None" or raw_desc == "":
+                        raw_desc = "NO DESCRIPTION"
 
                     # Merchant category at index 7; use it to enrich the description
                     # so the downstream ML categoriser has more signal
@@ -77,7 +79,7 @@ class AxisMyZoneParser(BaseParser):
                         "transaction_date": parsed_date.strftime("%Y-%m-%d"),
                         "value_date": None,
                         "description": enriched_desc,
-                        "raw_description": raw_desc,
+                        "description_raw": raw_desc,
                         "amount": amount,
                         "transaction_type": txn_type,
                         "balance": None,  # CC statements don't show running balance per row

@@ -59,7 +59,7 @@ class SBICashbackParser(BaseParser):
                                 "transaction_date": parsed_date.strftime("%Y-%m-%d"),
                                 "value_date": None,
                                 "description": "",
-                                "raw_description": "",
+                                "description_raw": "",
                                 "amount": None,
                                 "transaction_type": None,
                                 "balance": None,
@@ -70,8 +70,12 @@ class SBICashbackParser(BaseParser):
 
                             amt_match = amount_end_pattern.search(remainder)
                             if amt_match:
-                                current_txn["description"] = amt_match.group(1).strip()
-                                current_txn["raw_description"] = current_txn[
+                                current_txn["description"] = (
+                                    amt_match.group(1).strip()
+                                    if amt_match.group(1).strip()
+                                    else "NO DESCRIPTION"
+                                )
+                                current_txn["description_raw"] = current_txn[
                                     "description"
                                 ]
                                 current_txn["amount"] = float(
@@ -81,8 +85,14 @@ class SBICashbackParser(BaseParser):
                                     "credit" if amt_match.group(3) == "C" else "debit"
                                 )
                             else:
-                                current_txn["description"] = remainder.strip()
-                                current_txn["raw_description"] = remainder.strip()
+                                current_txn["description"] = (
+                                    remainder.strip()
+                                    if remainder.strip()
+                                    else "NO DESCRIPTION"
+                                )
+                                current_txn["description_raw"] = current_txn[
+                                    "description"
+                                ]
 
                         elif current_txn:
                             amt_match = amount_end_pattern.search(line)
@@ -91,8 +101,12 @@ class SBICashbackParser(BaseParser):
                                 full_desc = (
                                     f"{current_txn['description']} {desc_part}".strip()
                                 )
-                                current_txn["description"] = full_desc
-                                current_txn["raw_description"] = full_desc
+                                current_txn["description"] = (
+                                    full_desc if full_desc else "NO DESCRIPTION"
+                                )
+                                current_txn["description_raw"] = current_txn[
+                                    "description"
+                                ]
                                 current_txn["amount"] = float(
                                     amt_match.group(2).replace(",", "")
                                 )
@@ -103,8 +117,12 @@ class SBICashbackParser(BaseParser):
                                 full_desc = (
                                     f"{current_txn['description']} {line}".strip()
                                 )
-                                current_txn["description"] = full_desc
-                                current_txn["raw_description"] = full_desc
+                                current_txn["description"] = (
+                                    full_desc if full_desc else "NO DESCRIPTION"
+                                )
+                                current_txn["description_raw"] = current_txn[
+                                    "description"
+                                ]
 
                     # Aggressively delete page text to prevent pdfplumber memory leaks
                     del text

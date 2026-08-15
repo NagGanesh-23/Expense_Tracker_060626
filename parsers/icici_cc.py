@@ -84,7 +84,7 @@ class ICICICreditCardParser(BaseParser):
                                 "transaction_date": parsed_date.strftime("%Y-%m-%d"),
                                 "value_date": None,
                                 "description": "",
-                                "raw_description": "",
+                                "description_raw": "",
                                 "amount": None,
                                 "transaction_type": None,
                                 "balance": None,
@@ -101,8 +101,12 @@ class ICICICreditCardParser(BaseParser):
                                 rewards = amt_match.group(2)
                                 amount_str = amt_match.group(3)
 
-                                current_txn["description"] = desc_part
-                                current_txn["raw_description"] = desc_part
+                                current_txn["description"] = (
+                                    desc_part if desc_part else "NO DESCRIPTION"
+                                )
+                                current_txn["description_raw"] = (
+                                    desc_part if desc_part else "NO DESCRIPTION"
+                                )
 
                                 # Determine transaction type from CR suffix
                                 txn_type = "debit"
@@ -127,8 +131,16 @@ class ICICICreditCardParser(BaseParser):
                                 current_txn["transaction_type"] = txn_type
                             else:
                                 # Amount isn't here, it might be on the next line. Just store the text.
-                                current_txn["description"] = remainder.strip()
-                                current_txn["raw_description"] = remainder.strip()
+                                current_txn["description"] = (
+                                    remainder.strip()
+                                    if remainder.strip()
+                                    else "NO DESCRIPTION"
+                                )
+                                current_txn["description_raw"] = (
+                                    remainder.strip()
+                                    if remainder.strip()
+                                    else "NO DESCRIPTION"
+                                )
 
                         # If it doesn't start with a date, it's either overflow text or garbage
                         elif current_txn:
@@ -144,8 +156,12 @@ class ICICICreditCardParser(BaseParser):
                                 full_desc = (
                                     f"{current_txn['description']} {desc_part}".strip()
                                 )
-                                current_txn["description"] = full_desc
-                                current_txn["raw_description"] = full_desc
+                                current_txn["description"] = (
+                                    full_desc if full_desc else "NO DESCRIPTION"
+                                )
+                                current_txn["description_raw"] = (
+                                    full_desc if full_desc else "NO DESCRIPTION"
+                                )
 
                                 # Determine transaction type from CR suffix
                                 txn_type = "debit"
@@ -173,8 +189,12 @@ class ICICICreditCardParser(BaseParser):
                                 full_desc = (
                                     f"{current_txn['description']} {line}".strip()
                                 )
-                                current_txn["description"] = full_desc
-                                current_txn["raw_description"] = full_desc
+                                current_txn["description"] = (
+                                    full_desc if full_desc else "NO DESCRIPTION"
+                                )
+                                current_txn["description_raw"] = (
+                                    full_desc if full_desc else "NO DESCRIPTION"
+                                )
 
                 # End of document: flush the final buffered transaction
                 if current_txn and current_txn.get("amount") is not None:

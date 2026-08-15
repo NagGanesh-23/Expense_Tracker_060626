@@ -12,7 +12,7 @@ def test_normalize_single_empty():
 def test_normalize_single_standard():
     norm = Normalizer()
     raw_txn = {
-        "raw_description": "amazon!!! india - 123 ",
+        "description_raw": "amazon!!! india - 123 ",
         "amount": "1250.50",
         "transaction_date": "2026-05-21",
         "source_account": "ICICI_CC",
@@ -35,7 +35,7 @@ def test_normalize_single_standard():
 def test_normalize_single_invalid_amount_and_date():
     norm = Normalizer()
     raw_txn = {
-        "raw_description": "test desc",
+        "description_raw": "test desc",
         "amount": "invalid_amt",
         "transaction_date": "not-a-date",
     }
@@ -50,7 +50,7 @@ def test_normalize_dataframe():
     df = pd.DataFrame(
         [
             {
-                "raw_description": "swiggy @ bangalore",
+                "description_raw": "swiggy @ bangalore",
                 "amount": 450,
                 "transaction_date": "05/21/2026",
             }

@@ -11,7 +11,7 @@ class Normalizer:
 
         # 1. Clean the descriptions (remove extra spaces, special chars)
         # We keep alphanumeric and spaces, convert to uppercase for easier rule matching
-        df["description"] = df["raw_description"].apply(
+        df["description"] = df["description_raw"].apply(
             lambda x: re.sub(r"\s+", " ", re.sub(r"[^a-zA-Z0-9\s]", " ", str(x)))
             .strip()
             .upper()
@@ -43,7 +43,11 @@ class Normalizer:
         if not txn:
             return txn
 
-        desc = txn.get("raw_description", "")
+        desc = txn.get("description_raw", "")
+        if desc in ["", "None", "nan", "NaN", None]:
+            desc = "NO DESCRIPTION"
+            txn["description_raw"] = desc
+
         # We keep alphanumeric and spaces, convert to uppercase for easier rule matching
         cleaned_desc = (
             re.sub(r"\s+", " ", re.sub(r"[^a-zA-Z0-9\s]", " ", str(desc)))

@@ -12,7 +12,7 @@ def detect_source(filepath: str) -> str:
         return "hdfc_pixel"
     if "AXIS" in name or "MYZONE" in name:
         return "axis_myzone"
-    if "CREDITCARD" in name.replace("_", "") or "CC" in name:
+    if "CREDITCARD" in name.replace("_", ""):
         if "ICICI" in name:
             return "icici_cc"
     if "SAVING" in name or "BANKSTATEMENT" in name.replace("_", ""):
