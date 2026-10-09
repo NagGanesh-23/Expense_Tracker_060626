@@ -7,6 +7,8 @@ on:
       - 'dashboard/**'
       - '.github/workflows/deploy_dashboard.yml'
       - 'scripts/**'
+      - 'pipeline/**'
+      - 'models/**'
   workflow_dispatch:
   schedule:
     - cron: '0 2 * * *'

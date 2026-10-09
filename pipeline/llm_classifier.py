@@ -35,10 +35,10 @@ class LLMClassifier:
                             cat = str(row["category"]).strip()
                             self.exact_matches[desc] = cat
                 print(
-                    f"✅ Loaded {len(self.exact_matches)} exact match rules from Col B & Col F."
+                    f"[+] Loaded {len(self.exact_matches)} exact match rules from Col B & Col F."
                 )
         except Exception as e:
-            print(f"❌ Could not load training data for bypass: {e}")
+            print(f"[-] Could not load training data for bypass: {e}")
 
         gemini_key = self.config.get("gemini_api_key") or os.getenv("GEMINI_API_KEY")
         if gemini_key:
@@ -53,7 +53,7 @@ class LLMClassifier:
             self.nvidia_client = OpenAI(
                 base_url="https://integrate.api.nvidia.com/v1", api_key=nvidia_key
             )
-            self.nvidia_model = "openai/gpt-oss-120b"
+            self.nvidia_model = "nvidia/nemotron-3.5-lightning-30b-a3b"
             self.has_nvidia = True
         else:
             self.has_nvidia = False
@@ -101,12 +101,13 @@ You have deep knowledge of Indian payment rails (UPI, NEFT, IMPS, RTGS) and merc
 """
 
     def _build_prompt(self, txn: dict) -> str:
+        desc = txn.get("description_raw") or txn.get("description", "")
         return f"""
 Transaction Details:
 - Date: {txn.get('transaction_date', '')}
 - Amount: {txn.get('amount', 0)}
 - Type: {txn.get('transaction_type', '')}
-- Description: {txn.get('raw_description', '')}
+- Description: {desc}
 
 Classify this transaction.
 """
@@ -119,7 +120,8 @@ Classify this transaction.
         if not self.active or not txn:
             return None, 0.0, "none"
 
-        clean_desc = str(txn.get("raw_description", "")).strip().lower()
+        desc = txn.get("description_raw") or txn.get("description", "")
+        clean_desc = str(desc).strip().lower()
 
         # Local Bypass
         if clean_desc in self.exact_matches:
@@ -167,11 +169,21 @@ Classify this transaction.
                             {"role": "user", "content": prompt},
                         ],
                         temperature=0.1,
-                        top_p=1,
+                        top_p=0.95,
                         max_tokens=4096,
-                        stream=False,
+                        extra_body={
+                            "chat_template_kwargs": {"enable_thinking": True},
+                            "reasoning_budget": 2048,
+                        },
+                        stream=True,
                     )
-                    content = response.choices[0].message.content or ""
+                    content = ""
+                    for chunk in response:
+                        if not chunk.choices:
+                            continue
+                        if chunk.choices[0].delta.content is not None:
+                            content += chunk.choices[0].delta.content
+
                     content = content.replace("```json", "").replace("```", "").strip()
                     parsed = json.loads(content)
                     result = parsed[0] if isinstance(parsed, list) else parsed
@@ -199,7 +211,8 @@ Classify this transaction.
         infer_indices = []
 
         for i, txn in enumerate(txns):
-            clean_desc = str(txn.get("raw_description", "")).strip().lower()
+            desc = txn.get("description_raw") or txn.get("description", "")
+            clean_desc = str(desc).strip().lower()
             if clean_desc in self.exact_matches:
                 results[i] = (self.exact_matches[clean_desc], 1.0, "exact_match")
             else:
@@ -211,7 +224,8 @@ Classify this transaction.
 
         prompt = "Classify these transactions and return a JSON list of objects:\n"
         for idx, txn in enumerate(to_infer):
-            prompt += f"[{idx}] Date: {txn.get('transaction_date', '')}, Amount: {txn.get('amount', 0)}, Type: {txn.get('transaction_type', '')}, Desc: {txn.get('raw_description', '')}\n"
+            desc = txn.get("description_raw") or txn.get("description", "")
+            prompt += f"[{idx}] Date: {txn.get('transaction_date', '')}, Amount: {txn.get('amount', 0)}, Type: {txn.get('transaction_type', '')}, Desc: {desc}\n"
 
         max_retries = 3
         backoff = 3
@@ -260,11 +274,21 @@ Classify this transaction.
                             {"role": "user", "content": prompt},
                         ],
                         temperature=0.1,
-                        top_p=1,
-                        max_tokens=4096,
-                        stream=False,
+                        top_p=0.95,
+                        max_tokens=16384,
+                        extra_body={
+                            "chat_template_kwargs": {"enable_thinking": True},
+                            "reasoning_budget": 4096,
+                        },
+                        stream=True,
                     )
-                    content = response.choices[0].message.content or ""
+                    content = ""
+                    for chunk in response:
+                        if not chunk.choices:
+                            continue
+                        if chunk.choices[0].delta.content is not None:
+                            content += chunk.choices[0].delta.content
+
                     content = content.replace("```json", "").replace("```", "").strip()
                     parsed = json.loads(content)
                     if not isinstance(parsed, list):

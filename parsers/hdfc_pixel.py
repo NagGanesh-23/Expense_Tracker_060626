@@ -20,6 +20,11 @@ _PUA_MAP[chr(0xEE6A)] = "*"  # Cashpoints marker
 _PUA_MAP[chr(0xEE48)] = "("
 _PUA_MAP[chr(0xEE49)] = ")"
 _PUA_MAP[chr(0xEE55)] = "-"
+_PUA_MAP[chr(0xEE63)] = " "  # Space / separator
+_PUA_MAP[chr(0xEE54)] = " "
+_PUA_MAP[chr(0xEE4E)] = "("
+_PUA_MAP[chr(0xEE4F)] = ")"
+_PUA_MAP[chr(0xE095)] = ":"
 _PUA_MAP["\x00"] = " "  # Null bytes used as spaces
 
 
@@ -33,7 +38,7 @@ def _decode_pua(text: str) -> str:
 #   13 Jun 2026, 13:21 DMART AVENUE SUPERMART BANGALORE IND *60 ₹6,055.19
 #   10 Jun 2026, 15:14 PAYZAPP *₹2.00
 _TXN_PATTERN = re.compile(
-    r"^(\d{2}\s+\w{3}\s+\d{4}),\s*\d{2}:\d{2}\s+"  # Date & time
+    r"^(\d{2}\s+[A-Za-z]{3,4}\s+\d{4}),\s*\d{2}:\d{2}\s+"  # Date & time
     r"(.+?)\s+"  # Description (non-greedy)
     r"\*?₹([\d,]+\.\d{2})\s*$"  # Amount with ₹ prefix
 )
@@ -74,7 +79,7 @@ class HDFCPixelParser(BaseParser):
 
         # Split regex to support multi-line transactions
         date_start_pattern = re.compile(
-            r"^(\d{2}\s+\w{3}\s+\d{4}),\s*\d{2}:\d{2}\s+(.*)"
+            r"^(\d{2}\s+[A-Za-z]{3,4}\s+\d{4}),\s*\d{2}:\d{2}\s+(.*)"
         )
         amount_end_pattern = re.compile(r"(.*?)\s+\*?₹([\d,]+\.\d{2})\s*$")
 
@@ -114,7 +119,10 @@ class HDFCPixelParser(BaseParser):
                             date_str = date_match.group(1)
                             remainder = date_match.group(2)
 
-                            parsed_date = datetime.strptime(date_str, "%d %b %Y")
+                            clean_date_str = re.sub(
+                                r"\bSept\b", "Sep", date_str, flags=re.IGNORECASE
+                            )
+                            parsed_date = datetime.strptime(clean_date_str, "%d %b %Y")
 
                             current_txn = {
                                 "transaction_date": parsed_date.strftime("%Y-%m-%d"),

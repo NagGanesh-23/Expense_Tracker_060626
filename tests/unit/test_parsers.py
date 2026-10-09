@@ -126,3 +126,14 @@ def test_hdfc_pixel_parser_valid_transaction():
         assert len(txns) == 1
         assert txns[0]["amount"] == 50.00
         assert "SWIGGY DINEOUT" in txns[0]["description"]
+
+
+def test_hdfc_pixel_parser_september_transaction():
+    text = "17 Sept 2026, 13:31 CAS CTRLX TECHNOLOGIES Hyderabad IND *2 ₹229.00\n"
+    parser = HDFCPixelParser(io.BytesIO(b"dummy"))
+    with patch.object(parser, "_open_pdf", return_value=MockPDF([MockPage(text=text)])):
+        txns = list(parser.parse_stream())
+        assert len(txns) == 1
+        assert txns[0]["amount"] == 229.00
+        assert txns[0]["transaction_date"] == "2026-09-17"
+        assert "CTRLX TECHNOLOGIES" in txns[0]["description"]
