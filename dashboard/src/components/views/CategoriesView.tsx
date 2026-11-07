@@ -16,25 +16,53 @@ export function CategoriesView({ transactions, kpis, onSelectCategory }: Categor
     }).format(val);
   };
 
-  // Calculate category metrics including transaction counts and simulated MoM delta
+  // Determine distinct year-months in active transactions sorted chronologically
+  const sortedMonths = Array.from(
+    new Set(
+      transactions
+        .filter(t => t.is_spend)
+        .map(t => {
+          if (t.transaction_date && /^\d{4}-\d{2}/.test(t.transaction_date)) {
+            return t.transaction_date.substring(0, 7);
+          }
+          const y = t.year || '2026';
+          const m = String(t.month || '1').padStart(2, '0');
+          return `${y}-${m}`;
+        })
+    )
+  ).sort();
+
+  const currentMonthKey = sortedMonths.length > 0 ? sortedMonths[sortedMonths.length - 1] : null;
+  const prevMonthKey = sortedMonths.length > 1 ? sortedMonths[sortedMonths.length - 2] : null;
+
+  // Calculate category metrics including transaction counts and dynamic MoM delta
   const categoryMetrics = Object.entries(kpis.spendByCategory)
     .map(([name, amount]) => {
       const txCount = transactions.filter(t => t.is_spend && t.effective_category === name).length;
       const share = kpis.totalSpend > 0 ? (amount / kpis.totalSpend) * 100 : 0;
       
-      // Calculate MoM change (comparison between current month and previous month in dataset)
-      const thisMonthAmt = transactions
-        .filter(t => t.is_spend && t.effective_category === name && (t.month === '05' || t.month === '5' || t.month === 'May'))
-        .reduce((sum, t) => sum + t.amount, 0);
-      const lastMonthAmt = transactions
-        .filter(t => t.is_spend && t.effective_category === name && (t.month === '04' || t.month === '4' || t.month === 'Apr'))
-        .reduce((sum, t) => sum + t.amount, 0);
-
+      // Calculate MoM change (comparison between latest month and previous month in dataset)
       let momDelta = 0;
-      if (lastMonthAmt > 0) {
-        momDelta = ((thisMonthAmt - lastMonthAmt) / lastMonthAmt) * 100;
-      } else if (thisMonthAmt > 0) {
-        momDelta = 100; // New spend
+      if (currentMonthKey && prevMonthKey) {
+        const thisMonthAmt = transactions
+          .filter(t => t.is_spend && t.effective_category === name && (
+            (t.transaction_date && t.transaction_date.startsWith(currentMonthKey)) ||
+            (`${t.year}-${String(t.month).padStart(2, '0')}` === currentMonthKey)
+          ))
+          .reduce((sum, t) => sum + t.amount, 0);
+
+        const lastMonthAmt = transactions
+          .filter(t => t.is_spend && t.effective_category === name && (
+            (t.transaction_date && t.transaction_date.startsWith(prevMonthKey)) ||
+            (`${t.year}-${String(t.month).padStart(2, '0')}` === prevMonthKey)
+          ))
+          .reduce((sum, t) => sum + t.amount, 0);
+
+        if (lastMonthAmt > 0) {
+          momDelta = ((thisMonthAmt - lastMonthAmt) / lastMonthAmt) * 100;
+        } else if (thisMonthAmt > 0) {
+          momDelta = 100; // New spend
+        }
       }
 
       return {

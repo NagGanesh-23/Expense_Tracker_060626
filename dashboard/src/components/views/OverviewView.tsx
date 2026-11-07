@@ -30,6 +30,11 @@ const COLORS = [
   '#64748B', // Slate 500
 ];
 
+const MONTH_NAMES = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
 export function OverviewView({ transactions, kpis, onSelectCategory }: OverviewViewProps) {
   // Format currency in INR tabular nums
   const formatINR = (val: number) => {
@@ -40,18 +45,44 @@ export function OverviewView({ transactions, kpis, onSelectCategory }: OverviewV
     }).format(val);
   };
 
-  // Build monthly spend trend data
-  const monthlyDataMap: Record<string, number> = {};
+  // Build monthly spend trend data with zero-padded keys for chronological sorting
+  // and clean human-readable date formatting (e.g. "Jun 2026", "Jul 2026")
+  const monthlyDataMap: Record<string, { label: string; amount: number }> = {};
   transactions.forEach((t) => {
     if (t.is_spend) {
-      const key = `${t.year}-${t.month}`;
-      monthlyDataMap[key] = (monthlyDataMap[key] || 0) + t.amount;
+      let year = '';
+      let monthNum = 0;
+
+      if (t.transaction_date && /^\d{4}-\d{2}/.test(t.transaction_date)) {
+        const parts = t.transaction_date.split('-');
+        year = parts[0];
+        monthNum = parseInt(parts[1], 10);
+      } else {
+        year = String(t.year || '').trim();
+        const m = parseInt(String(t.month || '').trim(), 10);
+        if (!isNaN(m)) {
+          monthNum = m;
+        }
+      }
+
+      if (year && !isNaN(monthNum) && monthNum >= 1 && monthNum <= 12) {
+        const sortKey = `${year}-${String(monthNum).padStart(2, '0')}`;
+        const label = `${MONTH_NAMES[monthNum - 1]} ${year}`;
+        if (!monthlyDataMap[sortKey]) {
+          monthlyDataMap[sortKey] = { label, amount: 0 };
+        }
+        monthlyDataMap[sortKey].amount += t.amount;
+      }
     }
   });
 
   const trendData = Object.entries(monthlyDataMap)
-    .map(([date, amount]) => ({ date, amount }))
-    .sort((a, b) => a.date.localeCompare(b.date));
+    .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
+    .map(([rawKey, item]) => ({
+      rawKey,
+      date: item.label,
+      amount: Math.round(item.amount),
+    }));
 
   // Build category pie chart data
   const categoryData = Object.entries(kpis.spendByCategory)
