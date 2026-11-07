@@ -8,6 +8,7 @@ on:
       - '.github/workflows/deploy_dashboard.yml'
       - 'scripts/**'
       - 'pipeline/**'
+      - 'parsers/**'
       - 'models/**'
   workflow_dispatch:
   schedule:

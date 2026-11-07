@@ -19,6 +19,10 @@
 - **Simplicity & Surgical Edits**: Touch only necessary code blocks, avoid speculative abstractions, preserve existing code style and docstrings.
 - **Scope-Creep Tracking**: New capabilities or out-of-scope features must be tracked within the `v1.1 Post-v1 Pipeline Extensions` section of `05A_TASKS.md`.
 - **Explicit Assumptions**: State assumptions clearly and surface design trade-offs before proceeding.
+- **Two-Stage Statement & Dashboard Workflow (Option A)**:
+  - **Stage 1 (Statement Ingestion & Parse)**: When asked to fetch/parse latest statements, run `python expense_tracker.py --drive-sync`. Present parsing/categorization summary and pause for manual review in Google Sheet (`review_status = "pending"`).
+  - **Stage 2 (Feedback Sync & Dashboard Deploy)**: When user confirms manual review is done, run `python expense_tracker.py --sync-feedback --retrain` followed by `python scripts/export_sheets_to_json.py`, and commit/push changes to GitHub (`main`) to trigger `.github/workflows/deploy_dashboard.yml`.
+
 
 ## 3. Workflows & Skills Map
 - **Active Workflows**:
